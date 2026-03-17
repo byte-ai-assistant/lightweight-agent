@@ -146,9 +146,30 @@ This app uses the Claude Agent SDK as the core agent runtime.
 
 Before running the app, make sure your local environment already has working Claude authentication.
 
-If you use the Anthropic API directly, set `ANTHROPIC_API_KEY` in `.env.local`.
+Copy-paste check:
 
-If you use another local Claude auth flow, confirm it works before continuing.
+```bash
+printenv ANTHROPIC_API_KEY
+```
+
+If that prints a real key, you can use it in `.env.local` like this:
+
+```bash
+cp .env.example .env.local
+printf '\nANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY" >> .env.local
+```
+
+If it prints nothing, set the key manually in `.env.local`:
+
+```env
+ANTHROPIC_API_KEY=your_anthropic_api_key
+```
+
+Then verify the file contains it:
+
+```bash
+grep '^ANTHROPIC_API_KEY=' .env.local
+```
 
 ### 4. Create your local env file
 
