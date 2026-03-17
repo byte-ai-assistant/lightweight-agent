@@ -1,0 +1,12 @@
+---
+title: "Goals"
+description: "Long-term goals and priorities"
+---
+
+# Current Goals
+
+- Add your top goals here
+
+# Longer-Term Priorities
+
+- Add your medium- and long-term priorities here

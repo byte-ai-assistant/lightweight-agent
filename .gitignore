@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.next/
+.env.local
+data/
+tsconfig.tsbuildinfo
+logs/
+projects/
+credentials/
+
+.DS_Store
+skills/.DS_Store
+src/.DS_Store
+src/agent/.DS_Store

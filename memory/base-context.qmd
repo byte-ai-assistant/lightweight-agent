@@ -1,0 +1,28 @@
+---
+title: "Agent Base Context"
+description: "Always-loaded background context for your agent"
+---
+
+# About the User
+
+- Name: (replace me)
+- Role: (replace me)
+- Timezone: (replace me)
+
+# Preferences
+
+- Communication style: concise, direct
+- Preferred level of detail: practical
+
+# Important Contacts
+
+- Add the people your agent should know about here
+
+# Recurring Tasks
+
+- Add recurring workflows, reminders, or routines here
+
+# Notes
+
+- This file is loaded on every interaction
+- Keep it short and durable
