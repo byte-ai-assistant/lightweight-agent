@@ -146,6 +146,17 @@ This app uses the Claude Agent SDK as the core agent runtime.
 
 Before running the app, make sure your local environment already has working Claude authentication.
 
+Important:
+
+- If you already use Claude Code on this machine and it is logged in, you may not need to set `ANTHROPIC_API_KEY`.
+- In that case, the Claude Agent SDK can often use your existing local Claude authentication automatically.
+- That is why this app may run even if `.env.local` does not contain an Anthropic key.
+
+In plain terms:
+
+- already using Claude Code and it works on this machine: you can usually try running this repo without `ANTHROPIC_API_KEY`
+- not using Claude Code, or unsure whether Claude auth is available: set `ANTHROPIC_API_KEY` manually
+
 Copy-paste check:
 
 ```bash
@@ -171,6 +182,12 @@ Then verify the file contains it:
 grep '^ANTHROPIC_API_KEY=' .env.local
 ```
 
+If you are already logged into Claude Code and want to try the repo without setting an Anthropic key, continue to the next steps and start the app.
+
+If the app starts and responds to chat requests, your existing Claude authentication is being reused successfully.
+
+If startup or chat requests fail with a Claude or Anthropic authentication error, add `ANTHROPIC_API_KEY` to `.env.local` and restart.
+
 ### 4. Create your local env file
 
 ```bash
@@ -183,6 +200,21 @@ Minimum useful setup:
 
 ```env
 PORT=3000
+OPENAI_API_KEY=your_openai_api_key
+```
+
+If you are already using Claude Code locally, a minimal `.env.local` often looks like:
+
+```env
+PORT=3000
+OPENAI_API_KEY=your_openai_api_key
+```
+
+If you are not already authenticated with Claude tools on your machine, use:
+
+```env
+PORT=3000
+ANTHROPIC_API_KEY=your_anthropic_api_key
 OPENAI_API_KEY=your_openai_api_key
 ```
 
