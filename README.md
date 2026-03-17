@@ -194,7 +194,26 @@ If startup or chat requests fail with a Claude or Anthropic authentication error
 cp .env.example .env.local
 ```
 
-Then edit `.env.local`.
+Copy-paste starter file if you are already using Claude Code locally:
+
+```bash
+cat > .env.local <<'EOF'
+PORT=3000
+OPENAI_API_KEY=replace_me
+EOF
+```
+
+Copy-paste starter file if you are not already authenticated with Claude tools on your machine:
+
+```bash
+cat > .env.local <<'EOF'
+PORT=3000
+ANTHROPIC_API_KEY=replace_me
+OPENAI_API_KEY=replace_me
+EOF
+```
+
+Then open `.env.local` and replace the placeholder values.
 
 Minimum useful setup:
 
@@ -363,6 +382,7 @@ On macOS with Homebrew:
 
 ```bash
 brew install ffmpeg
+/opt/homebrew/bin/ffmpeg -version
 ```
 
 Important:
@@ -374,15 +394,17 @@ Important:
 
 If you want Gmail, Calendar, Drive, Docs, Sheets, Tasks, or Contacts tools:
 
-1. Install `gws`
-2. Run:
-
 ```bash
+brew install googleworkspace-cli
+gws --version
 gws auth login
 ```
 
-3. Confirm it works in your shell
-4. Check the path in `src/agent/tools/google.ts`
+Then confirm the binary path matches what this repo expects:
+
+```bash
+which gws
+```
 
 Important:
 
@@ -391,7 +413,37 @@ Important:
 
 ### 7. Customize the starter memory
 
-Edit these files before heavy use:
+Copy-paste quick starter memory:
+
+```bash
+cat > memory/base-context.qmd <<'EOF'
+---
+title: "Agent Base Context"
+description: "Always-loaded background context for your agent"
+---
+
+# About the User
+
+- Name: Replace me
+- Role: Replace me
+- Timezone: Replace me
+
+# Preferences
+
+- Communication style: concise, direct
+- Preferred level of detail: practical
+
+# Important Contacts
+
+- Add important contacts here
+
+# Recurring Tasks
+
+- Add recurring workflows here
+EOF
+```
+
+Then edit these files before heavy use:
 
 - `memory/base-context.qmd`
 - `memory/goals.qmd`
@@ -421,10 +473,10 @@ You should see logs similar to:
 
 ### 9. Open the web UI
 
-Go to:
+Open it directly:
 
-```text
-http://localhost:3000
+```bash
+open http://localhost:3000
 ```
 
 Send a simple message like:
@@ -438,7 +490,7 @@ Send a simple message like:
 If Telegram is configured:
 
 1. Open your bot in Telegram
-2. Send a text message
+2. Send a text message like `hello`
 3. Confirm you receive a response
 
 If it does not reply, check:
