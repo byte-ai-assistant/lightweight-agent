@@ -125,6 +125,183 @@ npm run dev
 - Web UI: `http://localhost:3000`
 - Chat API: `POST /api/chat`
 
+## Step-By-Step Setup
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/byte-ai-assistant/lightweight-agent.git
+cd lightweight-agent
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Make sure Claude SDK auth works on your machine
+
+This app uses the Claude Agent SDK as the core agent runtime.
+
+Before running the app, make sure your local environment already has working Claude authentication.
+
+If you use the Anthropic API directly, set `ANTHROPIC_API_KEY` in `.env.local`.
+
+If you use another local Claude auth flow, confirm it works before continuing.
+
+### 4. Create your local env file
+
+```bash
+cp .env.example .env.local
+```
+
+Then edit `.env.local`.
+
+Minimum useful setup:
+
+```env
+PORT=3000
+OPENAI_API_KEY=your_openai_api_key
+```
+
+Recommended additions if you want Telegram:
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_ALLOWED_USERS=123456789
+```
+
+Recommended additions if you want voice replies:
+
+```env
+ELEVEN_LABS_API_KEY=your_elevenlabs_key
+ELEVEN_LABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb
+```
+
+### 5. Optional: install `ffmpeg`
+
+`ffmpeg` is needed for:
+
+- Telegram voice/audio transcription
+- ElevenLabs voice reply conversion
+
+On macOS with Homebrew:
+
+```bash
+brew install ffmpeg
+```
+
+Important:
+
+- `src/lib/elevenlabs.ts` currently expects `ffmpeg` at `/opt/homebrew/bin/ffmpeg`
+- if your `ffmpeg` binary is elsewhere, update that path
+
+### 6. Optional: install and authenticate `gws`
+
+If you want Gmail, Calendar, Drive, Docs, Sheets, Tasks, or Contacts tools:
+
+1. Install `gws`
+2. Run:
+
+```bash
+gws auth login
+```
+
+3. Confirm it works in your shell
+4. Check the path in `src/agent/tools/google.ts`
+
+Important:
+
+- the current code expects `gws` at `/opt/homebrew/bin/gws`
+- if your `gws` binary is elsewhere, update that path
+
+### 7. Customize the starter memory
+
+Edit these files before heavy use:
+
+- `memory/base-context.qmd`
+- `memory/goals.qmd`
+- `memory/people.qmd`
+- `memory/projects.qmd`
+- `memory/decisions.qmd`
+
+At minimum, update:
+
+- your name or role
+- your timezone
+- your communication preferences
+- your current projects and priorities
+
+### 8. Start the app
+
+```bash
+npm run dev
+```
+
+You should see logs similar to:
+
+- `Lightweight Agent running on http://localhost:3000`
+- `Web UI: http://localhost:3000`
+- `Chat API: POST http://localhost:3000/api/chat`
+- `Telegram: Active (polling)` if Telegram is enabled
+
+### 9. Open the web UI
+
+Go to:
+
+```text
+http://localhost:3000
+```
+
+Send a simple message like:
+
+- `What tools do you have?`
+- `Create a project called Personal OS and add three tasks`
+- `What do you know about my goals?`
+
+### 10. Optional: test the Telegram bot
+
+If Telegram is configured:
+
+1. Open your bot in Telegram
+2. Send a text message
+3. Confirm you receive a response
+
+If it does not reply, check:
+
+- your bot token
+- your allowed user ID
+- server logs
+
+### 11. Optional: test the API directly
+
+```bash
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"web:test","message":"Summarize the projects in memory"}'
+```
+
+### 12. Optional: try a voice workflow
+
+If `OPENAI_API_KEY` and `ffmpeg` are configured:
+
+1. Send a Telegram voice message
+2. Confirm it is transcribed correctly
+
+If `ELEVEN_LABS_API_KEY` is also configured, ask for a spoken reply.
+
+## First-Run Checklist
+
+- `npm install` completed without errors
+- `.env.local` exists
+- Claude auth is available
+- `OPENAI_API_KEY` is set if you want memory indexing and Whisper
+- `memory/*.qmd` has your own starter context
+- `npm run dev` starts successfully
+- `http://localhost:3000` loads
+- Telegram responds if enabled
+
 ## Environment
 
 The repo supports a minimal setup and several optional integrations.
