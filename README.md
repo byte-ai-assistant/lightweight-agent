@@ -200,6 +200,126 @@ ELEVEN_LABS_API_KEY=your_elevenlabs_key
 ELEVEN_LABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb
 ```
 
+### 4a. Detailed Telegram setup
+
+If you want to use the Telegram bot, do this from start to finish.
+
+#### Create the bot with BotFather
+
+1. Open Telegram.
+2. Search for `@BotFather`.
+3. Start a chat with BotFather.
+4. Send:
+
+```text
+/newbot
+```
+
+5. Follow the prompts:
+
+- choose a display name for the bot
+- choose a unique username ending in `bot`
+
+Example:
+
+- Display name: `My Lightweight Agent`
+- Username: `my_lightweight_agent_bot`
+
+6. BotFather will reply with a bot token that looks like this:
+
+```text
+123456789:ABCdefGHIjklMNOpqrSTUvwxYZ123456789
+```
+
+That token is your `TELEGRAM_BOT_TOKEN`.
+
+#### Put the bot token in `.env.local`
+
+Open `.env.local` and add:
+
+```env
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ123456789
+```
+
+#### Find your Telegram user ID
+
+This project restricts access using `TELEGRAM_ALLOWED_USERS`.
+
+You need your numeric Telegram user ID, not your username.
+
+One easy way:
+
+1. In Telegram, search for `@userinfobot`
+2. Start a chat with it
+3. It will reply with your numeric Telegram ID
+
+Example:
+
+```text
+Id: 123456789
+```
+
+#### Add your user ID to `.env.local`
+
+If your Telegram ID is `123456789`, add:
+
+```env
+TELEGRAM_ALLOWED_USERS=123456789
+```
+
+If you want to allow multiple users, separate them with commas:
+
+```env
+TELEGRAM_ALLOWED_USERS=123456789,987654321
+```
+
+#### Start the app and verify Telegram is enabled
+
+Run:
+
+```bash
+npm run dev
+```
+
+When Telegram is configured correctly, you should see:
+
+```text
+Telegram bot started (polling)
+```
+
+and also:
+
+```text
+Telegram: Active (polling)
+```
+
+#### Start a chat with your bot
+
+1. In Telegram, search for the bot username you created in BotFather
+2. Open the bot chat
+3. Press `Start` or send a message like:
+
+```text
+hello
+```
+
+If your user ID is in `TELEGRAM_ALLOWED_USERS`, the bot should respond.
+
+#### Common Telegram mistakes
+
+- You used your Telegram username instead of your numeric user ID
+- The bot token in `.env.local` is wrong
+- You forgot to restart the app after editing `.env.local`
+- You created the bot but never opened a chat with it
+- You enabled Telegram in `.env.local` but the server logs do not show polling started
+
+#### Minimal copy-paste Telegram example
+
+```env
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ123456789
+TELEGRAM_ALLOWED_USERS=123456789
+```
+
 ### 5. Optional: install `ffmpeg`
 
 `ffmpeg` is needed for:
