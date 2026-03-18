@@ -21,7 +21,7 @@ import { createCronJob, listCronJobs, deleteCronJob, toggleCronJob } from "./too
 // Project board
 import {
   listProjects, getProject, createProject, updateProject,
-  addTask, updateTask, deleteTask, addPart, removePart, loadBoard,
+  addTask, updateTask, deleteTask, addPart, removePart, loadBoard, getTaskCounts,
 } from "./tools/projects.js";
 import type { Board } from "./tools/projects.js";
 // Transcription
@@ -113,22 +113,12 @@ function loadProjectBoard(): string {
   }
 
   const lines = active.map((p) => {
-    const counts = {
-      pending: p.tasks.filter((t) => t.status === "pending").length,
-      "in-progress": p.tasks.filter((t) => t.status === "in-progress").length,
-      completed: p.tasks.filter((t) => t.status === "completed").length,
-      blocked: p.tasks.filter((t) => t.status === "blocked").length,
-    };
-    const blockedTasks = p.tasks.filter((t) => t.status === "blocked");
+    const counts = getTaskCounts(p);
     const parts = (p.parts || []).length > 0
       ? ` | Parts: ${(p.parts || []).map((pt) => pt.name).join(", ")}`
       : "";
     const desc = p.description ? ` — ${p.description}` : "";
-    let line = `- **${p.name}** [${p.id}] (${p.status})${desc}${parts}\n  ${p.location ? `@ \`${p.location}\` | ` : ""}Tasks: ${counts.pending} pending, ${counts["in-progress"]} in-progress, ${counts.completed} completed, ${counts.blocked} blocked`;
-    if (blockedTasks.length > 0) {
-      line += "\n  Blocked: " + blockedTasks.map((t) => `#${t.id} ${t.title}`).join(", ");
-    }
-    return line;
+    return `- **${p.name}** [${p.id}] (${p.status})${desc}${parts}\n  ${p.location ? `@ \`${p.location}\` | ` : ""}Tasks: ${counts.total} (${counts.pending}p/${counts["in-progress"]}ip/${counts.completed}c/${counts.blocked}b)`;
   });
 
   const value = lines.join("\n");

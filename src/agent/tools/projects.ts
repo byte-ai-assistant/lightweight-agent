@@ -28,7 +28,6 @@ interface Project {
   location?: string;
   parts: Part[];
   status: "active" | "complete" | "paused";
-  tasks: Task[];
   created: string;
   lastUpdated: string;
   notes?: string;
@@ -59,16 +58,55 @@ function saveBoard(board: Board) {
   fs.writeFileSync(PROJECTS_FILE, JSON.stringify(board, null, 2));
 }
 
-function nextTaskId(project: Project): number {
-  if (project.tasks.length === 0) return 1;
-  return Math.max(...project.tasks.map((t) => t.id)) + 1;
+// --- Task helpers: tasks live in <project.location>/tasks.json ---
+
+function resolveLocation(loc: string): string {
+  return loc.replace(/^~/, process.env.HOME || "~");
+}
+
+function loadTasks(project: Project): Task[] {
+  if (!project.location) return [];
+  const loc = resolveLocation(project.location);
+  const tasksFile = path.join(loc, "tasks.json");
+  try {
+    if (fs.existsSync(tasksFile)) {
+      return JSON.parse(fs.readFileSync(tasksFile, "utf-8"));
+    }
+  } catch {
+    // Return empty on read error
+  }
+  return [];
+}
+
+function saveTasks(project: Project, tasks: Task[]): void {
+  if (!project.location) return;
+  const loc = resolveLocation(project.location);
+  fs.mkdirSync(loc, { recursive: true });
+  fs.writeFileSync(path.join(loc, "tasks.json"), JSON.stringify(tasks, null, 2));
+}
+
+function nextTaskId(tasks: Task[]): number {
+  if (tasks.length === 0) return 1;
+  return Math.max(...tasks.map((t) => t.id)) + 1;
+}
+
+/** Load task counts for a project (used by board summary). */
+export function getTaskCounts(project: Project): { pending: number; "in-progress": number; completed: number; blocked: number; total: number } {
+  const tasks = loadTasks(project);
+  return {
+    pending: tasks.filter((t) => t.status === "pending").length,
+    "in-progress": tasks.filter((t) => t.status === "in-progress").length,
+    completed: tasks.filter((t) => t.status === "completed").length,
+    blocked: tasks.filter((t) => t.status === "blocked").length,
+    total: tasks.length,
+  };
 }
 
 // --- Tools ---
 
 export const listProjects = tool(
   "list_projects",
-  "List all active projects with summary (name, status, location, task counts).",
+  "List all active projects with summary (name, status, description, task counts).",
   {},
   async () => {
     const board = loadBoard();
@@ -77,14 +115,10 @@ export const listProjects = tool(
     }
 
     const lines = board.projects.map((p) => {
-      const counts = {
-        pending: p.tasks.filter((t) => t.status === "pending").length,
-        "in-progress": p.tasks.filter((t) => t.status === "in-progress").length,
-        completed: p.tasks.filter((t) => t.status === "completed").length,
-        blocked: p.tasks.filter((t) => t.status === "blocked").length,
-      };
+      const counts = getTaskCounts(p);
       const taskSummary = `${counts.pending}p/${counts["in-progress"]}ip/${counts.completed}c/${counts.blocked}b`;
-      return `[${p.id}] ${p.name} (${p.status}) ${p.location ? `@ ${p.location} ` : ""}| ${p.tasks.length} tasks: ${taskSummary}`;
+      const desc = p.description ? ` — ${p.description}` : "";
+      return `[${p.id}] ${p.name} (${p.status})${desc} | ${counts.total} tasks: ${taskSummary}`;
     });
 
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
@@ -104,9 +138,10 @@ export const getProject = tool(
       return { content: [{ type: "text" as const, text: `Project '${args.id}' not found.` }] };
     }
 
-    const taskList = project.tasks.length === 0
+    const tasks = loadTasks(project);
+    const taskList = tasks.length === 0
       ? "  (no tasks)"
-      : project.tasks
+      : tasks
           .map((t) => `  [${t.id}] ${t.title} | ${t.status} | ${t.priority} | ${t.assigned}${t.notes ? ` | ${t.notes}` : ""}`)
           .join("\n");
 
@@ -125,7 +160,7 @@ ${partsList}
 Created: ${project.created}
 Updated: ${project.lastUpdated}
 Notes: ${project.notes || "(none)"}
-Tasks (${project.tasks.length}):
+Tasks (${tasks.length}):
 ${taskList}`;
 
     return { content: [{ type: "text" as const, text }] };
@@ -161,7 +196,6 @@ export const createProject = tool(
       location,
       parts: [],
       status: args.status || "active",
-      tasks: [],
       created: now,
       lastUpdated: now,
       notes: args.notes,
@@ -172,7 +206,7 @@ export const createProject = tool(
 
     // Scaffold project directory and CLAUDE.md
     let extra = "";
-    const loc = location.replace(/^~/, process.env.HOME || "~");
+    const loc = resolveLocation(location);
     try {
       fs.mkdirSync(loc, { recursive: true });
       const claudeMdPath = path.join(loc, "CLAUDE.md");
@@ -231,12 +265,12 @@ export const updateProject = tool(
 
 export const addTask = tool(
   "add_task",
-  "Add a task to a project.",
+  "Add a task to a project. Tasks are stored in the project directory.",
   {
     projectId: z.string().describe("Project ID"),
     title: z.string().describe("Task description"),
     priority: z.enum(["low", "medium", "high", "critical"]).optional().describe("Priority (default: medium)"),
-    assigned: z.string().optional().describe("Assignee (default: Agent)"),
+    assigned: z.string().optional().describe("Assignee (default: Byte)"),
     notes: z.string().optional().describe("Optional notes"),
   },
   async (args) => {
@@ -247,18 +281,22 @@ export const addTask = tool(
       return { content: [{ type: "text" as const, text: `Project '${args.projectId}' not found.` }] };
     }
 
+    if (!project.location) {
+      return { content: [{ type: "text" as const, text: `Project '${args.projectId}' has no location set — cannot store tasks.` }] };
+    }
+
+    const tasks = loadTasks(project);
     const task: Task = {
-      id: nextTaskId(project),
+      id: nextTaskId(tasks),
       title: args.title,
       status: "pending",
       priority: args.priority || "medium",
-      assigned: args.assigned || "Agent",
+      assigned: args.assigned || "Byte",
       notes: args.notes,
     };
 
-    project.tasks.push(task);
-    project.lastUpdated = new Date().toISOString();
-    saveBoard(board);
+    tasks.push(task);
+    saveTasks(project, tasks);
 
     return { content: [{ type: "text" as const, text: `Task #${task.id} added to '${project.name}': ${task.title}` }] };
   }
@@ -284,7 +322,8 @@ export const updateTask = tool(
       return { content: [{ type: "text" as const, text: `Project '${args.projectId}' not found.` }] };
     }
 
-    const task = project.tasks.find((t) => t.id === args.taskId);
+    const tasks = loadTasks(project);
+    const task = tasks.find((t) => t.id === args.taskId);
     if (!task) {
       return { content: [{ type: "text" as const, text: `Task #${args.taskId} not found in '${project.name}'.` }] };
     }
@@ -294,8 +333,7 @@ export const updateTask = tool(
     if (args.priority !== undefined) task.priority = args.priority;
     if (args.assigned !== undefined) task.assigned = args.assigned;
     if (args.notes !== undefined) task.notes = args.notes;
-    project.lastUpdated = new Date().toISOString();
-    saveBoard(board);
+    saveTasks(project, tasks);
 
     return { content: [{ type: "text" as const, text: `Task #${task.id} in '${project.name}' updated.` }] };
   }
@@ -316,14 +354,14 @@ export const deleteTask = tool(
       return { content: [{ type: "text" as const, text: `Project '${args.projectId}' not found.` }] };
     }
 
-    const idx = project.tasks.findIndex((t) => t.id === args.taskId);
+    const tasks = loadTasks(project);
+    const idx = tasks.findIndex((t) => t.id === args.taskId);
     if (idx === -1) {
       return { content: [{ type: "text" as const, text: `Task #${args.taskId} not found in '${project.name}'.` }] };
     }
 
-    const removed = project.tasks.splice(idx, 1)[0];
-    project.lastUpdated = new Date().toISOString();
-    saveBoard(board);
+    const removed = tasks.splice(idx, 1)[0];
+    saveTasks(project, tasks);
 
     return { content: [{ type: "text" as const, text: `Deleted task #${removed.id} ('${removed.title}') from '${project.name}'.` }] };
   }
@@ -366,7 +404,7 @@ export const addPart = tool(
 
     // Scaffold directory and CLAUDE.md for filesystem paths
     let extra = "";
-    const loc = args.location.replace(/^~/, process.env.HOME || "~");
+    const loc = resolveLocation(args.location);
     if (!loc.startsWith("http")) {
       try {
         fs.mkdirSync(loc, { recursive: true });

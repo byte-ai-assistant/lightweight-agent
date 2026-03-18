@@ -42,8 +42,7 @@ function handleStatus(userId: string): string {
   try {
     const board = loadBoard();
     const active = board.projects.filter((p) => p.status === "active" || p.status === "paused");
-    const totalTasks = active.reduce((n, p) => n + p.tasks.length, 0);
-    lines.push(`Projects: ${active.length} active, ${totalTasks} tasks`);
+    lines.push(`Projects: ${active.length} active`);
   } catch {
     lines.push(`Projects: unavailable`);
   }
