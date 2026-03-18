@@ -93,6 +93,14 @@ export function startTelegramBot() {
 
   const bot = new TelegramBot(token, { polling: true });
 
+  // Stop polling cleanly on process exit to prevent duplicate updates
+  const stopPolling = () => {
+    bot.stopPolling().catch(() => {});
+  };
+  process.once("SIGINT", stopPolling);
+  process.once("SIGTERM", stopPolling);
+  process.once("exit", stopPolling);
+
   bot.on("polling_error", (err) => {
     // Log once, not every poll cycle
     if (!(bot as any)._pollingErrorLogged) {
