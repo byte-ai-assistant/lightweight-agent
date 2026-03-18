@@ -70,26 +70,44 @@ The app indexes them into `data/memory-index.sqlite` using SQLite FTS and option
 
 ### Projects and tasks
 
-The repo includes a simple project board stored in `data/projects.json`.
+Projects are self-contained directories under `projects/`. The project board (`data/projects.json`) is a lightweight index that stores only metadata — a brief description, status, location, and part references. All detailed context and tasks live inside each project's own directory.
 
-The agent can:
+**Project creation flow:**
 
-- Create projects
-- Update projects
-- Add tasks
-- Update tasks
-- Delete tasks
-- Add or remove project parts
+When you ask the agent to create a project, it:
 
-**Parts** let a project have multiple sub-components — a backend repo, a marketing site, a knowledge base, a design system, etc. Each part has a name, type, and location (filesystem path or URL).
+1. Asks clarifying questions (purpose, tech stack, components, constraints)
+2. Creates a board entry with a brief one-line description
+3. Scaffolds `projects/<id>/` with a detailed `CLAUDE.md` based on your answers
 
-**Project CLAUDE.md** files provide project-specific instructions to the agent. When a project or part has a filesystem location, the agent:
+**Project directory structure:**
 
-- Scaffolds a starter `CLAUDE.md` when the project or part is created
-- Auto-loads the `CLAUDE.md` into context when the user's message mentions the project (by name, ID, or part name)
-- Autonomously updates the `CLAUDE.md` when the user shares relevant context (tech stack, conventions, architecture, build commands, etc.)
+```
+projects/erp/
+├── CLAUDE.md              ← project overview, tech stack, conventions, architecture
+├── tasks.json             ← all tasks for this project
+├── backend/
+│   └── CLAUDE.md          ← backend-specific context
+└── docs/
+    └── CLAUDE.md          ← docs conventions
+```
 
-This means each project carries its own working instructions without polluting the global prompt on every message.
+**What's always loaded** (every message):
+
+The board index shows each active project as a one-liner with task counts. No detailed context is loaded unless the project is mentioned.
+
+**What's loaded on mention:**
+
+`CLAUDE.md` files from the project and its parts are injected into context only when your message references the project by name, ID, or part name.
+
+**What the agent can do:**
+
+- Create or update projects (with `description` for the board summary)
+- Add or remove parts (sub-components with their own `CLAUDE.md`)
+- Add, update, or delete tasks (stored in `projects/<id>/tasks.json`)
+- Autonomously update `CLAUDE.md` when you share relevant project context
+
+**Parts** let a project have multiple sub-components — a backend repo, a marketing site, a knowledge base, etc. Each part has a name, type, and location (filesystem path or URL). Parts with filesystem locations get their own directory and `CLAUDE.md` scaffolded automatically.
 
 ### Cron jobs
 
