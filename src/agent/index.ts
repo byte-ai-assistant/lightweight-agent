@@ -21,7 +21,7 @@ import { createCronJob, listCronJobs, deleteCronJob, toggleCronJob } from "./too
 // Project board
 import {
   listProjects, getProject, createProject, updateProject,
-  addTask, updateTask, deleteTask, loadBoard,
+  addTask, updateTask, deleteTask, addPart, removePart, loadBoard,
 } from "./tools/projects.js";
 import type { Board } from "./tools/projects.js";
 // Transcription
@@ -124,6 +124,34 @@ function loadProjectBoard(): string {
     if (blockedTasks.length > 0) {
       line += "\n  Blocked: " + blockedTasks.map((t) => `#${t.id} ${t.title}`).join(", ");
     }
+
+    // Load project-level CLAUDE.md if it exists
+    if (p.location) {
+      const claudeMdPath = path.join(p.location, "CLAUDE.md");
+      try {
+        if (fs.existsSync(claudeMdPath)) {
+          const claudeMd = fs.readFileSync(claudeMdPath, "utf-8");
+          line += `\n  <project-instructions for="${p.name}">\n${claudeMd}\n  </project-instructions>`;
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    // Load CLAUDE.md from each part's location
+    for (const part of p.parts || []) {
+      if (!part.location || part.location.startsWith("http")) continue;
+      const partClaudeMd = path.join(part.location, "CLAUDE.md");
+      try {
+        if (fs.existsSync(partClaudeMd)) {
+          const content = fs.readFileSync(partClaudeMd, "utf-8");
+          line += `\n  <project-instructions for="${p.name}/${part.name}">\n${content}\n  </project-instructions>`;
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
     return line;
   });
 
@@ -198,7 +226,7 @@ const toolServer = createSdkMcpServer({
     // Cron
     createCronJob, listCronJobs, deleteCronJob, toggleCronJob,
     // Projects
-    listProjects, getProject, createProject, updateProject, addTask, updateTask, deleteTask,
+    listProjects, getProject, createProject, updateProject, addTask, updateTask, deleteTask, addPart, removePart,
     // Transcription
     transcribeAudioTool,
     // TTS
@@ -337,6 +365,8 @@ You have three tiers of memory:
 - For cron job actions, write clear prompts that you'll understand when triggered later.
 - Always confirm before sending emails.
 - When starting or completing work on a project, update the project board to reflect current status.
+- **Project CLAUDE.md**: Each project and its parts can have CLAUDE.md files that are auto-loaded into your context. When the user shares relevant project context — tech stack decisions, conventions, architecture, key paths, build commands, or other instructions — update the appropriate CLAUDE.md to capture it: the project-level one at \`<project.location>/CLAUDE.md\` for cross-cutting concerns, or a part-level one at \`<part.location>/CLAUDE.md\` for part-specific context. Keep them concise and actionable.
+- **Project parts**: Projects can have multiple parts (repos, marketing sites, knowledge bases, design systems, etc.) via add_part. Each part has a name, type, location, and optional notes. Parts with filesystem locations get their own CLAUDE.md auto-loaded.
 
 ${skillIndex || "(No skills available. Skills can be added to bundled, managed, or workspace directories.)"}
 

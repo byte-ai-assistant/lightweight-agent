@@ -14,10 +14,18 @@ interface Task {
   notes?: string;
 }
 
+interface Part {
+  name: string;
+  type: string; // e.g. "repo", "marketing", "docs", "knowledge-base", "design"
+  location: string; // filesystem path or URL
+  notes?: string;
+}
+
 interface Project {
   id: string;
   name: string;
   location?: string;
+  parts: Part[];
   status: "active" | "complete" | "paused";
   tasks: Task[];
   created: string;
@@ -101,9 +109,17 @@ export const getProject = tool(
           .map((t) => `  [${t.id}] ${t.title} | ${t.status} | ${t.priority} | ${t.assigned}${t.notes ? ` | ${t.notes}` : ""}`)
           .join("\n");
 
+    const partsList = (project.parts || []).length === 0
+      ? "  (none)"
+      : (project.parts || [])
+          .map((pt) => `  - ${pt.name} (${pt.type}) @ ${pt.location}${pt.notes ? ` | ${pt.notes}` : ""}`)
+          .join("\n");
+
     const text = `Project: ${project.name} (${project.id})
 Status: ${project.status}
 Location: ${project.location || "(not set)"}
+Parts:
+${partsList}
 Created: ${project.created}
 Updated: ${project.lastUpdated}
 Notes: ${project.notes || "(none)"}
@@ -136,6 +152,7 @@ export const createProject = tool(
       id: args.id,
       name: args.name,
       location: args.location,
+      parts: [],
       status: args.status || "active",
       tasks: [],
       created: now,
@@ -146,7 +163,23 @@ export const createProject = tool(
     board.projects.push(project);
     saveBoard(board);
 
-    return { content: [{ type: "text" as const, text: `Project '${args.name}' (${args.id}) created.` }] };
+    // Scaffold project directory and CLAUDE.md if location is set
+    let extra = "";
+    if (args.location) {
+      const loc = args.location.replace(/^~/, process.env.HOME || "~");
+      try {
+        fs.mkdirSync(loc, { recursive: true });
+        const claudeMdPath = path.join(loc, "CLAUDE.md");
+        if (!fs.existsSync(claudeMdPath)) {
+          fs.writeFileSync(claudeMdPath, `# ${args.name}\n\n${args.notes ? args.notes + "\n" : ""}## Tech Stack\n\n## Conventions\n\n## Architecture\n`);
+          extra = ` CLAUDE.md created at ${claudeMdPath}.`;
+        }
+      } catch {
+        // Non-fatal: project board entry is still created
+      }
+    }
+
+    return { content: [{ type: "text" as const, text: `Project '${args.name}' (${args.id}) created.${extra}` }] };
   }
 );
 
@@ -286,5 +319,89 @@ export const deleteTask = tool(
     saveBoard(board);
 
     return { content: [{ type: "text" as const, text: `Deleted task #${removed.id} ('${removed.title}') from '${project.name}'.` }] };
+  }
+);
+
+export const addPart = tool(
+  "add_part",
+  "Add a part (sub-project, repo, knowledge base, etc.) to a project. Scaffolds directory and CLAUDE.md if the location is a filesystem path.",
+  {
+    projectId: z.string().describe("Project ID"),
+    name: z.string().describe("Part name (e.g. 'backend', 'marketing-site', 'docs')"),
+    type: z.string().describe("Part type (e.g. 'repo', 'marketing', 'docs', 'knowledge-base', 'design')"),
+    location: z.string().describe("Filesystem path or URL for this part"),
+    notes: z.string().optional().describe("Optional notes about this part"),
+  },
+  async (args) => {
+    const board = loadBoard();
+    const project = board.projects.find((p) => p.id === args.projectId);
+
+    if (!project) {
+      return { content: [{ type: "text" as const, text: `Project '${args.projectId}' not found.` }] };
+    }
+
+    if (!project.parts) project.parts = [];
+
+    if (project.parts.some((pt) => pt.name === args.name)) {
+      return { content: [{ type: "text" as const, text: `Part '${args.name}' already exists in '${project.name}'.` }] };
+    }
+
+    const part: Part = {
+      name: args.name,
+      type: args.type,
+      location: args.location,
+      notes: args.notes,
+    };
+
+    project.parts.push(part);
+    project.lastUpdated = new Date().toISOString();
+    saveBoard(board);
+
+    // Scaffold directory and CLAUDE.md for filesystem paths
+    let extra = "";
+    const loc = args.location.replace(/^~/, process.env.HOME || "~");
+    if (!loc.startsWith("http")) {
+      try {
+        fs.mkdirSync(loc, { recursive: true });
+        const claudeMdPath = path.join(loc, "CLAUDE.md");
+        if (!fs.existsSync(claudeMdPath)) {
+          fs.writeFileSync(claudeMdPath, `# ${project.name} — ${args.name}\n\nPart type: ${args.type}\n${args.notes ? args.notes + "\n" : ""}\n## Overview\n\n## Conventions\n`);
+          extra = ` CLAUDE.md created at ${claudeMdPath}.`;
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    return { content: [{ type: "text" as const, text: `Part '${args.name}' (${args.type}) added to '${project.name}'.${extra}` }] };
+  }
+);
+
+export const removePart = tool(
+  "remove_part",
+  "Remove a part from a project (does not delete files).",
+  {
+    projectId: z.string().describe("Project ID"),
+    name: z.string().describe("Part name to remove"),
+  },
+  async (args) => {
+    const board = loadBoard();
+    const project = board.projects.find((p) => p.id === args.projectId);
+
+    if (!project) {
+      return { content: [{ type: "text" as const, text: `Project '${args.projectId}' not found.` }] };
+    }
+
+    if (!project.parts) project.parts = [];
+    const idx = project.parts.findIndex((pt) => pt.name === args.name);
+    if (idx === -1) {
+      return { content: [{ type: "text" as const, text: `Part '${args.name}' not found in '${project.name}'.` }] };
+    }
+
+    project.parts.splice(idx, 1);
+    project.lastUpdated = new Date().toISOString();
+    saveBoard(board);
+
+    return { content: [{ type: "text" as const, text: `Part '${args.name}' removed from '${project.name}'.` }] };
   }
 );
