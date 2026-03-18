@@ -123,7 +123,8 @@ function loadProjectBoard(): string {
     const parts = (p.parts || []).length > 0
       ? ` | Parts: ${(p.parts || []).map((pt) => pt.name).join(", ")}`
       : "";
-    let line = `- **${p.name}** [${p.id}] (${p.status}) ${p.location ? `@ \`${p.location}\`` : ""}${parts}\n  Tasks: ${counts.pending} pending, ${counts["in-progress"]} in-progress, ${counts.completed} completed, ${counts.blocked} blocked`;
+    const desc = p.description ? ` — ${p.description}` : "";
+    let line = `- **${p.name}** [${p.id}] (${p.status})${desc}${parts}\n  ${p.location ? `@ \`${p.location}\` | ` : ""}Tasks: ${counts.pending} pending, ${counts["in-progress"]} in-progress, ${counts.completed} completed, ${counts.blocked} blocked`;
     if (blockedTasks.length > 0) {
       line += "\n  Blocked: " + blockedTasks.map((t) => `#${t.id} ${t.title}`).join(", ");
     }
@@ -393,7 +394,7 @@ You have three tiers of memory:
 - For cron job actions, write clear prompts that you'll understand when triggered later.
 - Always confirm before sending emails.
 - When starting or completing work on a project, update the project board to reflect current status.
-- **Creating projects**: When the user asks to create a new project, ask clarifying questions first before calling create_project. Ask about: what the project is (purpose/goal), tech stack if it's a code project, key components or parts, any conventions or constraints. Use the answers to write a meaningful initial CLAUDE.md in the project directory (replacing the scaffolded template) with a filled-in Overview, Tech Stack, Conventions, and Architecture section. The goal is that the CLAUDE.md gives you full context to work on the project in future conversations.
+- **Creating projects**: When the user asks to create a new project, ask clarifying questions first before calling create_project. Ask about: what the project is (purpose/goal), tech stack if it's a code project, key components or parts, any conventions or constraints. Use the answers to: (1) set a brief one-line description on the project board, and (2) write a detailed CLAUDE.md in the project directory (at \`projects/<id>/CLAUDE.md\`) with filled-in Overview, Tech Stack, Conventions, and Architecture sections. The project board is just a lightweight index — keep it slim. All detailed project context belongs in the project's CLAUDE.md, which is auto-loaded when you work on that project.
 - **Project CLAUDE.md**: Each project and its parts can have CLAUDE.md files that are auto-loaded into your context. When the user shares relevant project context — tech stack decisions, conventions, architecture, key paths, build commands, or other instructions — update the appropriate CLAUDE.md to capture it: the project-level one at \`<project.location>/CLAUDE.md\` for cross-cutting concerns, or a part-level one at \`<part.location>/CLAUDE.md\` for part-specific context. Keep them concise and actionable.
 - **Project parts**: Projects can have multiple parts (repos, marketing sites, knowledge bases, design systems, etc.) via add_part. Each part has a name, type, location, and optional notes. Parts with filesystem locations get their own CLAUDE.md auto-loaded.
 

@@ -24,6 +24,7 @@ interface Part {
 interface Project {
   id: string;
   name: string;
+  description?: string; // brief one-liner for the board summary
   location?: string;
   parts: Part[];
   status: "active" | "complete" | "paused";
@@ -116,6 +117,7 @@ export const getProject = tool(
           .join("\n");
 
     const text = `Project: ${project.name} (${project.id})
+Description: ${project.description || "(none)"}
 Status: ${project.status}
 Location: ${project.location || "(not set)"}
 Parts:
@@ -132,13 +134,14 @@ ${taskList}`;
 
 export const createProject = tool(
   "create_project",
-  "Create a new project on the board.",
+  "Create a new project on the board. The project directory and CLAUDE.md are always created automatically.",
   {
     id: z.string().describe("Unique slug ID (e.g. 'my-project')"),
     name: z.string().describe("Human-readable project name"),
-    location: z.string().optional().describe("Directory path for the project"),
+    description: z.string().optional().describe("Brief one-line description (shown in board summary)"),
+    location: z.string().optional().describe("Directory path for the project (defaults to projects/<id>/)"),
     status: z.enum(["active", "complete", "paused"]).optional().describe("Project status (default: active)"),
-    notes: z.string().optional().describe("Optional project-level notes"),
+    notes: z.string().optional().describe("Optional internal notes"),
   },
   async (args) => {
     const board = loadBoard();
@@ -154,6 +157,7 @@ export const createProject = tool(
     const project: Project = {
       id: args.id,
       name: args.name,
+      description: args.description,
       location,
       parts: [],
       status: args.status || "active",
@@ -190,6 +194,7 @@ export const updateProject = tool(
   {
     id: z.string().describe("Project ID"),
     name: z.string().optional().describe("New name"),
+    description: z.string().optional().describe("New brief description"),
     location: z.string().optional().describe("New location path"),
     status: z.enum(["active", "complete", "paused", "archived"]).optional().describe("New status"),
     notes: z.string().optional().describe("New notes"),
@@ -204,6 +209,7 @@ export const updateProject = tool(
 
     const project = board.projects[idx];
     if (args.name !== undefined) project.name = args.name;
+    if (args.description !== undefined) project.description = args.description;
     if (args.location !== undefined) project.location = args.location;
     if (args.notes !== undefined) project.notes = args.notes;
     project.lastUpdated = new Date().toISOString();
