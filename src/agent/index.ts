@@ -120,18 +120,49 @@ function loadProjectBoard(): string {
       blocked: p.tasks.filter((t) => t.status === "blocked").length,
     };
     const blockedTasks = p.tasks.filter((t) => t.status === "blocked");
-    let line = `- **${p.name}** (${p.status}) ${p.location ? `@ \`${p.location}\`` : ""}\n  Tasks: ${counts.pending} pending, ${counts["in-progress"]} in-progress, ${counts.completed} completed, ${counts.blocked} blocked`;
+    const parts = (p.parts || []).length > 0
+      ? ` | Parts: ${(p.parts || []).map((pt) => pt.name).join(", ")}`
+      : "";
+    let line = `- **${p.name}** [${p.id}] (${p.status}) ${p.location ? `@ \`${p.location}\`` : ""}${parts}\n  Tasks: ${counts.pending} pending, ${counts["in-progress"]} in-progress, ${counts.completed} completed, ${counts.blocked} blocked`;
     if (blockedTasks.length > 0) {
       line += "\n  Blocked: " + blockedTasks.map((t) => `#${t.id} ${t.title}`).join(", ");
     }
+    return line;
+  });
 
-    // Load project-level CLAUDE.md if it exists
+  const value = lines.join("\n");
+  cachedProjectBoard = { value, expiresAt: Date.now() + STATIC_CACHE_TTL };
+  return value;
+}
+
+function loadProjectInstructions(message: string): string {
+  let board: Board;
+  try {
+    board = loadBoard();
+  } catch {
+    return "";
+  }
+
+  const msgLower = message.toLowerCase();
+  const active = board.projects.filter((p) => p.status === "active" || p.status === "paused");
+
+  const instructions: string[] = [];
+
+  for (const p of active) {
+    // Check if the message mentions this project by name, id, or any part name
+    const terms = [p.name.toLowerCase(), p.id.toLowerCase()];
+    for (const part of p.parts || []) {
+      terms.push(part.name.toLowerCase());
+    }
+    if (!terms.some((t) => msgLower.includes(t))) continue;
+
+    // Load project-level CLAUDE.md
     if (p.location) {
       const claudeMdPath = path.join(p.location, "CLAUDE.md");
       try {
         if (fs.existsSync(claudeMdPath)) {
-          const claudeMd = fs.readFileSync(claudeMdPath, "utf-8");
-          line += `\n  <project-instructions for="${p.name}">\n${claudeMd}\n  </project-instructions>`;
+          const content = fs.readFileSync(claudeMdPath, "utf-8");
+          instructions.push(`<project-instructions for="${p.name}">\n${content}\n</project-instructions>`);
         }
       } catch {
         // Ignore read errors
@@ -145,19 +176,15 @@ function loadProjectBoard(): string {
       try {
         if (fs.existsSync(partClaudeMd)) {
           const content = fs.readFileSync(partClaudeMd, "utf-8");
-          line += `\n  <project-instructions for="${p.name}/${part.name}">\n${content}\n  </project-instructions>`;
+          instructions.push(`<project-instructions for="${p.name}/${part.name}">\n${content}\n</project-instructions>`);
         }
       } catch {
         // Ignore read errors
       }
     }
+  }
 
-    return line;
-  });
-
-  const value = lines.join("\n");
-  cachedProjectBoard = { value, expiresAt: Date.now() + STATIC_CACHE_TTL };
-  return value;
+  return instructions.join("\n\n");
 }
 
 async function autoRetrieveMemories(message: string): Promise<string> {
@@ -311,6 +338,7 @@ export async function runAgent(
 ): Promise<string> {
   const baseContext = loadBaseContext();
   const projectBoard = loadProjectBoard();
+  const projectInstructions = loadProjectInstructions(message);
   const [memories, chatGists] = await Promise.all([
     autoRetrieveMemories(message),
     autoRetrieveChatGists(message),
@@ -375,7 +403,7 @@ ${baseContext || "(No base context configured yet. User can add memory/base-cont
 
 ## Project Board
 ${projectBoard || "(No active projects. Use project tools to create and manage projects.)"}
-
+${projectInstructions ? `\n## Active Project Instructions\n${projectInstructions}` : ""}
 ## Relevant Memories
 ${memories || "(No relevant memories found. Use memory_search for deeper queries.)"}${chatGistSection}`;
 
