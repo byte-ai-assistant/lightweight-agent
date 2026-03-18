@@ -147,16 +147,25 @@ function loadProjectInstructions(message: string): string {
     }
     if (!terms.some((t) => msgLower.includes(t))) continue;
 
-    // Load project-level CLAUDE.md
+    // Load project context files (CLAUDE.md, learnings.md, structure.md)
     if (p.location) {
-      const claudeMdPath = path.join(p.location, "CLAUDE.md");
-      try {
-        if (fs.existsSync(claudeMdPath)) {
-          const content = fs.readFileSync(claudeMdPath, "utf-8");
-          instructions.push(`<project-instructions for="${p.name}">\n${content}\n</project-instructions>`);
+      const contextFiles = [
+        ["CLAUDE.md", "instructions"],
+        ["learnings.md", "learnings"],
+        ["structure.md", "structure"],
+      ];
+      for (const [fileName, tag] of contextFiles) {
+        const filePath = path.join(p.location, fileName);
+        try {
+          if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, "utf-8");
+            if (content.trim()) {
+              instructions.push(`<project-${tag} for="${p.name}">\n${content}\n</project-${tag}>`);
+            }
+          }
+        } catch {
+          // Ignore read errors
         }
-      } catch {
-        // Ignore read errors
       }
     }
 
@@ -384,8 +393,13 @@ You have three tiers of memory:
 - For cron job actions, write clear prompts that you'll understand when triggered later.
 - Always confirm before sending emails.
 - When starting or completing work on a project, update the project board to reflect current status.
-- **Creating projects**: When the user asks to create a new project, ask clarifying questions first before calling create_project. Ask about: what the project is (purpose/goal), tech stack if it's a code project, key components or parts, any conventions or constraints. Use the answers to: (1) set a brief one-line description on the project board, and (2) write a detailed CLAUDE.md in the project directory (at \`projects/<id>/CLAUDE.md\`) with filled-in Overview, Tech Stack, Conventions, and Architecture sections. The project board is just a lightweight index — keep it slim. All detailed project context belongs in the project's CLAUDE.md, which is auto-loaded when you work on that project.
-- **Project CLAUDE.md**: Each project and its parts can have CLAUDE.md files that are auto-loaded into your context. When the user shares relevant project context — tech stack decisions, conventions, architecture, key paths, build commands, or other instructions — update the appropriate CLAUDE.md to capture it: the project-level one at \`<project.location>/CLAUDE.md\` for cross-cutting concerns, or a part-level one at \`<part.location>/CLAUDE.md\` for part-specific context. Keep them concise and actionable.
+- **Creating projects**: When the user asks to create a new project, ask clarifying questions first before calling create_project. Ask about: what the project is (purpose/goal), tech stack if it's a code project, key components or parts, any conventions or constraints. Use the answers to: (1) set a brief one-line description on the project board, and (2) populate the project files with real content based on their answers. The project board is just a lightweight index — keep it slim. All detailed context belongs in the project directory.
+- **Project structure**: Every project has a standard directory layout. All files are auto-loaded when the project is mentioned. If a file is missing, the project still works — you just won't have that context. If you need it, ask the user and recreate it.
+  - \`CLAUDE.md\` — Project overview, tech stack, conventions, architecture. Your primary reference for how to work on this project. Update it when the user shares relevant decisions.
+  - \`tasks.json\` — Structured task list (managed via add_task/update_task/delete_task tools). Machine-readable.
+  - \`learnings.md\` — Discoveries, gotchas, edge cases, debugging notes. Update this when you learn something non-obvious while working on the project — things that would save time if you encountered them again.
+  - \`structure.md\` — Project layout, module boundaries, key file paths. Update this when the project structure changes or when you map out a new area of the codebase.
+- **Working on a project**: When you start working on a project, all its context files are already in your prompt. Read them to get up to speed quickly. When you finish a task or learn something new, update the relevant file (learnings.md for discoveries, structure.md for layout changes, CLAUDE.md for convention/architecture changes). This keeps the project context fresh for future conversations.
 - **Project parts**: Projects can have multiple parts (repos, marketing sites, knowledge bases, design systems, etc.) via add_part. Each part has a name, type, location, and optional notes. Parts with filesystem locations get their own CLAUDE.md auto-loaded.
 
 ${skillIndex || "(No skills available. Skills can be added to bundled, managed, or workspace directories.)"}

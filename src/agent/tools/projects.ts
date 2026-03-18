@@ -204,16 +204,24 @@ export const createProject = tool(
     board.projects.push(project);
     saveBoard(board);
 
-    // Scaffold project directory and CLAUDE.md
+    // Scaffold project directory with standard structure
     let extra = "";
     const loc = resolveLocation(location);
     try {
       fs.mkdirSync(loc, { recursive: true });
-      const claudeMdPath = path.join(loc, "CLAUDE.md");
-      if (!fs.existsSync(claudeMdPath)) {
-        fs.writeFileSync(claudeMdPath, `# ${args.name}\n\n${args.notes ? args.notes + "\n" : ""}## Overview\n\n## Tech Stack\n\n## Conventions\n\n## Architecture\n`);
-        extra = ` Directory and CLAUDE.md created at ${loc}.`;
+      const files: [string, string][] = [
+        ["CLAUDE.md", `# ${args.name}\n\n${args.notes ? args.notes + "\n" : ""}## Overview\n\n## Tech Stack\n\n## Conventions\n\n## Architecture\n`],
+        ["tasks.json", "[]"],
+        ["learnings.md", `# ${args.name} — Learnings\n\nCapture discoveries, gotchas, edge cases, and debugging notes here.\n`],
+        ["structure.md", `# ${args.name} — Structure\n\nDocument the project layout, module boundaries, and key file paths here.\n`],
+      ];
+      for (const [name, content] of files) {
+        const filePath = path.join(loc, name);
+        if (!fs.existsSync(filePath)) {
+          fs.writeFileSync(filePath, content);
+        }
       }
+      extra = ` Project scaffolded at ${loc} (CLAUDE.md, tasks.json, learnings.md, structure.md).`;
     } catch {
       // Non-fatal: project board entry is still created
     }
