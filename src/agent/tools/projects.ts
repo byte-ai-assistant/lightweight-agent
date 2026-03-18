@@ -147,11 +147,14 @@ export const createProject = tool(
       return { content: [{ type: "text" as const, text: `Project '${args.id}' already exists.` }] };
     }
 
+    // Default location to projects/<id>/ under the working directory
+    const location = args.location || path.resolve("projects", args.id);
+
     const now = new Date().toISOString();
     const project: Project = {
       id: args.id,
       name: args.name,
-      location: args.location,
+      location,
       parts: [],
       status: args.status || "active",
       tasks: [],
@@ -163,20 +166,18 @@ export const createProject = tool(
     board.projects.push(project);
     saveBoard(board);
 
-    // Scaffold project directory and CLAUDE.md if location is set
+    // Scaffold project directory and CLAUDE.md
     let extra = "";
-    if (args.location) {
-      const loc = args.location.replace(/^~/, process.env.HOME || "~");
-      try {
-        fs.mkdirSync(loc, { recursive: true });
-        const claudeMdPath = path.join(loc, "CLAUDE.md");
-        if (!fs.existsSync(claudeMdPath)) {
-          fs.writeFileSync(claudeMdPath, `# ${args.name}\n\n${args.notes ? args.notes + "\n" : ""}## Tech Stack\n\n## Conventions\n\n## Architecture\n`);
-          extra = ` CLAUDE.md created at ${claudeMdPath}.`;
-        }
-      } catch {
-        // Non-fatal: project board entry is still created
+    const loc = location.replace(/^~/, process.env.HOME || "~");
+    try {
+      fs.mkdirSync(loc, { recursive: true });
+      const claudeMdPath = path.join(loc, "CLAUDE.md");
+      if (!fs.existsSync(claudeMdPath)) {
+        fs.writeFileSync(claudeMdPath, `# ${args.name}\n\n${args.notes ? args.notes + "\n" : ""}## Overview\n\n## Tech Stack\n\n## Conventions\n\n## Architecture\n`);
+        extra = ` Directory and CLAUDE.md created at ${loc}.`;
       }
+    } catch {
+      // Non-fatal: project board entry is still created
     }
 
     return { content: [{ type: "text" as const, text: `Project '${args.name}' (${args.id}) created.${extra}` }] };
