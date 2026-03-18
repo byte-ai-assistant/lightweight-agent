@@ -79,6 +79,17 @@ The agent can:
 - Add tasks
 - Update tasks
 - Delete tasks
+- Add or remove project parts
+
+**Parts** let a project have multiple sub-components — a backend repo, a marketing site, a knowledge base, a design system, etc. Each part has a name, type, and location (filesystem path or URL).
+
+**Project CLAUDE.md** files provide project-specific instructions to the agent. When a project or part has a filesystem location, the agent:
+
+- Scaffolds a starter `CLAUDE.md` when the project or part is created
+- Auto-loads the `CLAUDE.md` into context when the user's message mentions the project (by name, ID, or part name)
+- Autonomously updates the `CLAUDE.md` when the user shares relevant context (tech stack, conventions, architecture, build commands, etc.)
+
+This means each project carries its own working instructions without polluting the global prompt on every message.
 
 ### Cron jobs
 
