@@ -1,8 +1,0 @@
----
-title: "People"
-description: "Important people and relationships"
----
-
-# Key People
-
-- Add the people your agent should remember here

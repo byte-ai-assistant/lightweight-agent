@@ -7,6 +7,8 @@ tsconfig.tsbuildinfo
 logs/
 projects/
 credentials/
+memory/*.qmd
+!memory/*.example.qmd
 
 .DS_Store
 skills/.DS_Store

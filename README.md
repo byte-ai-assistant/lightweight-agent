@@ -64,7 +64,7 @@ When a session expires, the agent consolidates the conversation into durable mem
 
 ### Long-term memory
 
-Memory files live in `memory/*.qmd`.
+Memory files live in `memory/*.qmd`. The repo ships `*.example.qmd` templates — `npm run setup` copies them into place and personalizes them. Your `*.qmd` files are gitignored so personal context stays local.
 
 The app indexes them into `data/memory-index.sqlite` using SQLite FTS and optional OpenAI embeddings. Relevant memories are automatically retrieved into the prompt.
 
@@ -453,50 +453,23 @@ Important:
 
 ### 7. Customize the starter memory
 
-Copy-paste quick starter memory:
+If you ran `npm run setup`, your memory files are already personalized. You can skip this step.
+
+If you prefer to set up memory manually, copy the templates:
 
 ```bash
-cat > memory/base-context.qmd <<'EOF'
----
-title: "Agent Base Context"
-description: "Always-loaded background context for your agent"
----
-
-# About the User
-
-- Name: Replace me
-- Role: Replace me
-- Timezone: Replace me
-
-# Preferences
-
-- Communication style: concise, direct
-- Preferred level of detail: practical
-
-# Important Contacts
-
-- Add important contacts here
-
-# Recurring Tasks
-
-- Add recurring workflows here
-EOF
+for f in memory/*.example.qmd; do cp "$f" "${f%.example.qmd}.qmd"; done
 ```
 
-Then edit these files before heavy use:
+Then edit:
 
-- `memory/base-context.qmd`
-- `memory/goals.qmd`
-- `memory/people.qmd`
-- `memory/projects.qmd`
-- `memory/decisions.qmd`
+- `memory/base-context.qmd` — agent identity, your name, role, timezone, standing rules
+- `memory/goals.qmd` — current goals and priorities
+- `memory/people.qmd` — key people the agent should know about
+- `memory/projects.qmd` — active projects
+- `memory/decisions.qmd` — durable decisions and workflow rules
 
-At minimum, update:
-
-- your name or role
-- your timezone
-- your communication preferences
-- your current projects and priorities
+These files are gitignored. The `.example.qmd` templates stay in the repo for new clones.
 
 ### 8. Start the app
 
@@ -562,7 +535,7 @@ If `ELEVEN_LABS_API_KEY` is also configured, ask for a spoken reply.
 - `.env.local` exists
 - Claude auth is available
 - `OPENAI_API_KEY` is set if you want memory indexing and Whisper
-- `memory/*.qmd` has your own starter context
+- `memory/*.qmd` files exist (run `npm run setup` or copy from templates)
 - `npm run dev` starts successfully
 - `http://localhost:3000` loads
 - Telegram responds if enabled
@@ -679,7 +652,8 @@ The current TTS path expects `ffmpeg` at `/opt/homebrew/bin/ffmpeg`.
 - `src/agent/skills/`: skill loading and config
 - `src/telegram/bot.ts`: Telegram bot
 - `src/app/`: Next.js UI and API route
-- `memory/`: starter memory files
+- `memory/*.example.qmd`: starter memory templates (tracked)
+- `memory/*.qmd`: your personalized memory (gitignored)
 - `skills/`: workspace skills
 - `data/`: runtime state, created locally
 
@@ -705,7 +679,7 @@ The intended customization points are:
 
 ## Suggested Next Steps
 
-- Replace the starter memory files with your own context
+- Run `npm run setup` to personalize memory files, or edit `memory/*.qmd` directly
 - Add or remove tools based on your needs
 - Add auth before exposing the web UI
 - Add tests for critical workflows

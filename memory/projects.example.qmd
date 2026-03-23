@@ -8,4 +8,3 @@ description: "Project context and status"
 - Project name: (replace me)
   - Goal: (replace me)
   - Status: (replace me)
-  - Next step: (replace me)

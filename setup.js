@@ -4,7 +4,7 @@
 // Run: node setup.js
 
 import { createInterface } from "readline";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync } from "fs";
 import { execSync } from "child_process";
 import { resolve, join } from "path";
 
@@ -391,8 +391,25 @@ function writeEnvFile() {
   success(`Wrote ${ENV_PATH}`);
 }
 
+function copyTemplates() {
+  mkdirSync(MEMORY_DIR, { recursive: true });
+  try {
+    const templates = readdirSync(MEMORY_DIR).filter((f) => f.endsWith(".example.qmd"));
+    for (const tpl of templates) {
+      const target = tpl.replace(".example.qmd", ".qmd");
+      const targetPath = join(MEMORY_DIR, target);
+      if (!existsSync(targetPath)) {
+        copyFileSync(join(MEMORY_DIR, tpl), targetPath);
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 async function setupAgentContext() {
   heading("Agent Context");
+
+  // Copy templates into place for any missing .qmd files
+  copyTemplates();
 
   const ctx = loadExistingContext();
   const isRerun = !!(ctx.agentName || ctx.name);
@@ -409,8 +426,6 @@ async function setupAgentContext() {
     info("Skipping. You can edit memory/*.qmd files later.");
     return;
   }
-
-  mkdirSync(MEMORY_DIR, { recursive: true });
 
   // ── Agent identity ────────────────────────────────────────────────
 
