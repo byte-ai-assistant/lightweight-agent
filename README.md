@@ -433,7 +433,7 @@ If you want Gmail, Calendar, Drive, Docs, Sheets, Tasks, or Contacts tools:
 ```bash
 brew install googleworkspace-cli
 gws --version
-gws auth setup
+gws auth login
 ```
 
 Then confirm the binary path matches what this repo expects:
@@ -444,10 +444,9 @@ which gws
 
 Important:
 
-- the default code path is `/opt/homebrew/bin/gws`
-- if your `gws` binary is elsewhere, set `GWS_BINARY`
-- if you want a dedicated agent mailbox, export credentials for that mailbox and set `GWS_CREDENTIALS_FILE`
-- if `AGENT_EMAIL` is set, the server verifies that `gws gmail users getProfile --params '{"userId":"me"}'` resolves to that exact address before startup continues
+- the default binary path is `/opt/homebrew/bin/gws` — set `GWS_BINARY` if yours is elsewhere
+- to pin the agent to a specific Google account, set `AGENT_EMAIL` and optionally `GWS_CREDENTIALS_FILE`
+- see the [Google Workspace](#google-workspace) section below for full identity verification details
 
 ### 7. Customize the starter memory
 
@@ -578,6 +577,9 @@ The repo supports a minimal setup and several optional integrations.
 
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_ALLOWED_USERS`
+- `AGENT_EMAIL`
+- `GWS_BINARY`
+- `GWS_CREDENTIALS_FILE`
 - `ELEVEN_LABS_API_KEY`
 - `ELEVEN_LABS_VOICE_ID`
 - `WHISPER_MODEL`
@@ -602,20 +604,48 @@ The Google tools shell out to the `gws` CLI for:
 Setup:
 
 1. Install `gws`
-2. Authenticate the mailbox you want the agent to own
-3. Set `AGENT_EMAIL` to that mailbox
-4. If you keep dedicated `gws` credentials in a file, set `GWS_CREDENTIALS_FILE`
-5. Confirm the binary path via `GWS_BINARY` if needed
+2. Run `gws auth login` to authenticate the Google account you want the agent to use
+3. Confirm the binary path matches what the repo expects (default `/opt/homebrew/bin/gws`)
 
-Example explicit setup:
+#### Without explicit identity (default)
+
+If `AGENT_EMAIL` is not set, the agent uses whatever Google account `gws` is currently authenticated as. This is the simplest setup and works well for single-user environments.
+
+#### With explicit identity
+
+If you want the agent to have a fixed Google Workspace identity, set `AGENT_EMAIL`:
+
+```env
+AGENT_EMAIL=agent@example.com
+```
+
+When `AGENT_EMAIL` is set:
+
+- At startup, the server calls `gws gmail users getProfile` and verifies the active account matches `AGENT_EMAIL`. If it doesn't match, the server refuses to start.
+- Before every Google tool call (Gmail, Calendar, Drive, Docs, Sheets, Tasks, Contacts), the identity is re-verified. The result is cached for 5 minutes, so this doesn't add latency to every request.
+- If the credentials rotate or get swapped mid-run, the next tool call will fail with a clear identity mismatch error rather than silently operating as the wrong account.
+- The agent's email address is included in the system prompt so it knows its own identity when composing emails.
+
+Note: the identity check uses the Gmail API (`gmail.users.getProfile`), so the Gmail API must be enabled for the authenticated account even if you only plan to use Calendar, Drive, or other services.
+
+#### Dedicated credentials file
+
+If you keep separate `gws` credentials for the agent (e.g. for CI or a service account), point to them with `GWS_CREDENTIALS_FILE`:
 
 ```env
 AGENT_EMAIL=agent@example.com
 GWS_CREDENTIALS_FILE=/absolute/path/to/gws-credentials.json
-GWS_BINARY=/opt/homebrew/bin/gws
 ```
 
-At startup, this repo now verifies that the configured `AGENT_EMAIL` matches the active Gmail identity returned by `gws`.
+This sets `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE` in the environment for all `gws` calls.
+
+#### Custom binary path
+
+If `gws` is not at `/opt/homebrew/bin/gws`, set `GWS_BINARY`:
+
+```env
+GWS_BINARY=/usr/local/bin/gws
+```
 
 ### Audio transcription
 
@@ -668,6 +698,7 @@ The intended customization points are:
 - Do not commit `data/`
 - Do not expose this app publicly without adding authentication
 - The agent has broad local tool access and should run only in an environment you trust
+- Set `AGENT_EMAIL` if multiple Google accounts are available on the machine, to prevent the agent from accidentally operating as the wrong identity
 
 ## Suggested Next Steps
 

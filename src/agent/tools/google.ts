@@ -108,7 +108,7 @@ export async function verifyGoogleWorkspaceIdentity(): Promise<void> {
   cachedIdentityCheck = { email: expectedEmail, verifiedAt: Date.now() };
 }
 
-async function ensureGmailIdentity(): Promise<void> {
+async function ensureGoogleIdentity(): Promise<void> {
   await verifyGoogleWorkspaceIdentity();
 }
 
@@ -123,7 +123,7 @@ export const listEmails = tool(
   },
   async (args) => {
     try {
-      await ensureGmailIdentity();
+      await ensureGoogleIdentity();
       const q = args.query ?? "is:inbox";
       const params = JSON.stringify({ userId: "me", q, maxResults: args.maxResults ?? 10 });
       const output = await gws("gmail", "users", "messages", "list", "--params", params);
@@ -140,7 +140,7 @@ export const readEmail = tool(
   { messageId: z.string().describe("The Gmail message ID") },
   async (args) => {
     try {
-      await ensureGmailIdentity();
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ userId: "me", id: args.messageId, format: "full" });
       const output = await gws("gmail", "users", "messages", "get", "--params", params);
       return { content: [{ type: "text" as const, text: output }] };
@@ -163,7 +163,7 @@ export const sendEmail = tool(
   },
   async (args) => {
     try {
-      await ensureGmailIdentity();
+      await ensureGoogleIdentity();
       if (!args.body && !args.bodyHtml) {
         return { content: [{ type: "text" as const, text: "Error: either body or bodyHtml is required." }] };
       }
@@ -210,7 +210,7 @@ export const searchEmails = tool(
   },
   async (args) => {
     try {
-      await ensureGmailIdentity();
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ userId: "me", q: args.query, maxResults: args.maxResults ?? 10 });
       const output = await gws("gmail", "users", "messages", "list", "--params", params);
       return { content: [{ type: "text" as const, text: output || "No emails match that query." }] };
@@ -228,6 +228,7 @@ export const calendarList = tool(
   {},
   async () => {
     try {
+      await ensureGoogleIdentity();
       const output = await gws("calendar", "calendarList", "list");
       return { content: [{ type: "text" as const, text: output || "No calendars found." }] };
     } catch (err: any) {
@@ -251,6 +252,7 @@ export const calendarEvents = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       // Use +agenda helper for today/week/days shortcuts
       if (args.today || args.week || args.days) {
         const cmdArgs = ["calendar", "+agenda"];
@@ -289,6 +291,7 @@ export const calendarGetEvent = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ calendarId: args.calendarId, eventId: args.eventId });
       const output = await gws("calendar", "events", "get", "--params", params);
       return { content: [{ type: "text" as const, text: output }] };
@@ -314,6 +317,7 @@ export const calendarCreateEvent = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       // Use +insert helper for simple events
       const cmdArgs = [
         "calendar", "+insert",
@@ -365,6 +369,7 @@ export const calendarDeleteEvent = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ calendarId: args.calendarId, eventId: args.eventId });
       const output = await gws("calendar", "events", "delete", "--params", params);
       return { content: [{ type: "text" as const, text: output || "Event deleted." }] };
@@ -383,6 +388,7 @@ export const calendarSearch = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({
         calendarId: "primary",
         q: args.query,
@@ -409,6 +415,7 @@ export const driveList = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params: Record<string, any> = { pageSize: args.maxResults ?? 20 };
       if (args.folderId) params.q = `'${args.folderId}' in parents`;
       const output = await gws("drive", "files", "list", "--params", JSON.stringify(params));
@@ -428,6 +435,7 @@ export const driveSearch = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({
         q: `fullText contains '${args.query.replace(/'/g, "\\'")}'`,
         pageSize: args.maxResults ?? 10,
@@ -446,6 +454,7 @@ export const driveGetFile = tool(
   { fileId: z.string().describe("The Drive file ID") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ fileId: args.fileId, fields: "*" });
       const output = await gws("drive", "files", "get", "--params", params);
       return { content: [{ type: "text" as const, text: output }] };
@@ -465,6 +474,7 @@ export const driveDownload = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       if (args.format) {
         // Export Google Workspace files
         const params = JSON.stringify({ fileId: args.fileId, mimeType: args.format });
@@ -494,6 +504,7 @@ export const driveUpload = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const cmdArgs = ["drive", "+upload", args.localPath];
       if (args.parentId) cmdArgs.push("--parent", args.parentId);
       const output = await gws(...cmdArgs);
@@ -513,6 +524,7 @@ export const driveMkdir = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const body: Record<string, any> = {
         name: args.name,
         mimeType: "application/vnd.google-apps.folder",
@@ -532,6 +544,7 @@ export const driveDelete = tool(
   { fileId: z.string().describe("The Drive file ID") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ fileId: args.fileId });
       const body = JSON.stringify({ trashed: true });
       const output = await gws("drive", "files", "update", "--params", params, "--json", body);
@@ -553,6 +566,7 @@ export const driveShare = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ fileId: args.fileId });
       const body: Record<string, any> = {
         role: args.role ?? "reader",
@@ -575,6 +589,7 @@ export const docsRead = tool(
   { docId: z.string().describe("The Google Doc ID") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ documentId: args.docId });
       const output = await gws("docs", "documents", "get", "--params", params);
       return { content: [{ type: "text" as const, text: output || "(Empty document)" }] };
@@ -594,6 +609,7 @@ export const docsCreate = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const body = JSON.stringify({ title: args.title });
       const createOutput = await gws("docs", "documents", "create", "--json", body);
 
@@ -627,6 +643,7 @@ export const docsWrite = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const output = await gws("docs", "+write", "--document", args.docId, "--text", args.content);
       return { content: [{ type: "text" as const, text: output || "Document updated." }] };
     } catch (err: any) {
@@ -641,6 +658,7 @@ export const docsInfo = tool(
   { docId: z.string().describe("The Google Doc ID") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ documentId: args.docId });
       const output = await gws("docs", "documents", "get", "--params", params);
       return { content: [{ type: "text" as const, text: output }] };
@@ -660,6 +678,7 @@ export const docsExport = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const mimeTypes: Record<string, string> = {
         pdf: "application/pdf",
         docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -687,6 +706,7 @@ export const sheetsRead = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const output = await gws("sheets", "+read", "--spreadsheet", args.spreadsheetId, "--range", args.range);
       return { content: [{ type: "text" as const, text: output || "(Empty range)" }] };
     } catch (err: any) {
@@ -705,6 +725,7 @@ export const sheetsUpdate = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({
         spreadsheetId: args.spreadsheetId,
         range: args.range,
@@ -728,6 +749,7 @@ export const sheetsAppend = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const output = await gws("sheets", "+append", "--spreadsheet", args.spreadsheetId, "--json-values", JSON.stringify(args.values));
       return { content: [{ type: "text" as const, text: output || "Rows appended." }] };
     } catch (err: any) {
@@ -742,6 +764,7 @@ export const sheetsMetadata = tool(
   { spreadsheetId: z.string().describe("The Spreadsheet ID") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ spreadsheetId: args.spreadsheetId });
       const output = await gws("sheets", "spreadsheets", "get", "--params", params);
       return { content: [{ type: "text" as const, text: output }] };
@@ -757,6 +780,7 @@ export const sheetsCreate = tool(
   { title: z.string().describe("Spreadsheet title") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const body = JSON.stringify({ properties: { title: args.title } });
       const output = await gws("sheets", "spreadsheets", "create", "--json", body);
       return { content: [{ type: "text" as const, text: output || "Sheet created." }] };
@@ -774,6 +798,7 @@ export const googleTasksListLists = tool(
   {},
   async () => {
     try {
+      await ensureGoogleIdentity();
       const output = await gws("tasks", "tasklists", "list");
       return { content: [{ type: "text" as const, text: output || "No task lists found." }] };
     } catch (err: any) {
@@ -791,6 +816,7 @@ export const googleTasksList = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params: Record<string, any> = { tasklist: args.tasklistId };
       if (args.maxResults) params.maxResults = args.maxResults;
       const output = await gws("tasks", "tasks", "list", "--params", JSON.stringify(params));
@@ -812,6 +838,7 @@ export const googleTasksAdd = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ tasklist: args.tasklistId });
       const body: Record<string, any> = { title: args.title };
       if (args.notes) body.notes = args.notes;
@@ -833,6 +860,7 @@ export const googleTasksDone = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ tasklist: args.tasklistId, task: args.taskId });
       const body = JSON.stringify({ status: "completed" });
       const output = await gws("tasks", "tasks", "patch", "--params", params, "--json", body);
@@ -852,6 +880,7 @@ export const googleTasksDelete = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({ tasklist: args.tasklistId, task: args.taskId });
       const output = await gws("tasks", "tasks", "delete", "--params", params);
       return { content: [{ type: "text" as const, text: output || "Task deleted." }] };
@@ -872,6 +901,7 @@ export const contactsSearch = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({
         query: args.query,
         readMask: "names,emailAddresses,phoneNumbers,organizations",
@@ -891,6 +921,7 @@ export const contactsList = tool(
   { maxResults: z.number().optional().describe("Max results (default 20)") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({
         resourceName: "people/me",
         personFields: "names,emailAddresses,phoneNumbers,organizations",
@@ -910,6 +941,7 @@ export const contactsGet = tool(
   { resourceName: z.string().describe("Contact resource name (e.g. 'people/c1234567890')") },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const params = JSON.stringify({
         resourceName: args.resourceName,
         personFields: "names,emailAddresses,phoneNumbers,organizations,addresses,biographies",
@@ -933,6 +965,7 @@ export const contactsCreate = tool(
   },
   async (args) => {
     try {
+      await ensureGoogleIdentity();
       const body: Record<string, any> = {
         names: [{ givenName: args.givenName, familyName: args.familyName }],
       };
