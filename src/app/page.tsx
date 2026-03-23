@@ -11,7 +11,22 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [agentName, setAgentName] = useState("Lightweight Agent");
+  const [agentRole, setAgentRole] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/identity")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.name) {
+          setAgentName(data.name);
+          document.title = data.name;
+        }
+        if (data.role) setAgentRole(data.role);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,9 +60,9 @@ export default function Home() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxWidth: 800, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ padding: "16px 24px", borderBottom: "1px solid #222", flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Lightweight Agent</h1>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{agentName}</h1>
         <p style={{ margin: "4px 0 0", fontSize: 13, color: "#888" }}>
-          Personal AI Assistant — Memory, Email, Web Search, Cron Jobs
+          {agentRole || "Personal AI Assistant"}
         </p>
       </div>
 
@@ -55,7 +70,7 @@ export default function Home() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px 24px" }}>
         {messages.length === 0 && (
           <div style={{ textAlign: "center", marginTop: 120, color: "#555" }}>
-            <p style={{ fontSize: 40, margin: 0 }}>J</p>
+            <p style={{ fontSize: 40, margin: 0 }}>{agentName.charAt(0)}</p>
             <p>Send a message to get started.</p>
           </div>
         )}

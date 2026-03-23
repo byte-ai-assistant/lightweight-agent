@@ -1,4 +1,6 @@
 import "dotenv/config";
+import fs from "fs";
+import path from "path";
 import express from "express";
 import next from "next";
 import { startTelegramBot, sendTelegramMessage } from "./telegram/bot.js";
@@ -17,6 +19,19 @@ async function main() {
   // Clean env after dotenv loaded placeholders
   if (process.env.ANTHROPIC_API_KEY?.startsWith("your-")) {
     delete process.env.ANTHROPIC_API_KEY;
+  }
+
+  // 0. Copy memory templates if no .qmd files exist yet
+  const memoryDir = path.resolve("memory");
+  if (fs.existsSync(memoryDir)) {
+    for (const file of fs.readdirSync(memoryDir)) {
+      if (!file.endsWith(".example.qmd")) continue;
+      const target = path.join(memoryDir, file.replace(".example.qmd", ".qmd"));
+      if (!fs.existsSync(target)) {
+        fs.copyFileSync(path.join(memoryDir, file), target);
+        process.stderr.write(`[memory] Copied template ${file} -> ${path.basename(target)}\n`);
+      }
+    }
   }
 
   // 1. Initialize Next.js
@@ -71,6 +86,26 @@ async function main() {
       process.stderr.write(`Chat API error: ${errMsg}\n${errStack}\n`);
       res.status(500).json({ error: "Agent error", detail: errMsg });
     }
+  });
+
+  // API: Agent identity for the web UI
+  server.get("/api/identity", (_req, res) => {
+    const memoryDir = path.resolve("memory");
+    const baseFile = path.join(memoryDir, "base-context.qmd");
+    let agentName = "Lightweight Agent";
+    let agentRole = "";
+    try {
+      if (fs.existsSync(baseFile)) {
+        const content = fs.readFileSync(baseFile, "utf-8");
+        const nameMatch = content.match(/^- Name:\s*(.+)$/m);
+        const roleMatch = content.match(/^- Role:\s*(.+)$/m);
+        const name = nameMatch?.[1]?.trim();
+        const role = roleMatch?.[1]?.trim();
+        if (name && name !== "(not set)") agentName = name;
+        if (role && role !== "(not set)") agentRole = role;
+      }
+    } catch { /* use defaults */ }
+    res.json({ name: agentName, role: agentRole });
   });
 
   // All other routes -> Next.js
