@@ -5,15 +5,100 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-const GWS = "/opt/homebrew/bin/gws";
+const DEFAULT_GWS_BINARY = "/opt/homebrew/bin/gws";
+const IDENTITY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type GmailIdentity = {
+  email: string | null;
+  raw: string;
+};
+
+let cachedIdentityCheck:
+  | { email: string; verifiedAt: number }
+  | null = null;
+
+function getGwsBinary(): string {
+  return process.env.GWS_BINARY?.trim() || DEFAULT_GWS_BINARY;
+}
+
+function getGwsEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env, NO_COLOR: "1" };
+
+  if (process.env.GWS_CREDENTIALS_FILE && !env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE) {
+    env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = process.env.GWS_CREDENTIALS_FILE;
+  }
+
+  return env;
+}
 
 async function gws(...args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync(GWS, args, {
+  const { stdout } = await execFileAsync(getGwsBinary(), args, {
     timeout: 60_000,
     maxBuffer: 10 * 1024 * 1024,
-    env: { ...process.env, NO_COLOR: "1" },
+    env: getGwsEnv(),
   });
   return stdout.trim();
+}
+
+export function getConfiguredAgentEmail(): string | null {
+  const email = process.env.AGENT_EMAIL?.trim().toLowerCase();
+  return email || null;
+}
+
+export async function getActiveGmailIdentity(): Promise<GmailIdentity> {
+  const raw = await gws("gmail", "users", "getProfile", "--params", JSON.stringify({ userId: "me" }));
+
+  try {
+    const parsed = JSON.parse(raw) as { emailAddress?: string };
+    return { email: parsed.emailAddress?.trim().toLowerCase() || null, raw };
+  } catch {
+    const match = raw.match(/"emailAddress"\s*:\s*"([^"]+)"/);
+    return { email: match?.[1]?.trim().toLowerCase() || null, raw };
+  }
+}
+
+export async function verifyGoogleWorkspaceIdentity(): Promise<void> {
+  const expectedEmail = getConfiguredAgentEmail();
+  if (!expectedEmail) return;
+
+  if (
+    cachedIdentityCheck &&
+    cachedIdentityCheck.email === expectedEmail &&
+    Date.now() - cachedIdentityCheck.verifiedAt < IDENTITY_CACHE_TTL_MS
+  ) {
+    return;
+  }
+
+  let active: GmailIdentity;
+  try {
+    active = await getActiveGmailIdentity();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to verify Google Workspace identity for AGENT_EMAIL=${expectedEmail}. ` +
+      `Check GWS_BINARY/GWS_CREDENTIALS_FILE or your gws auth setup. ${detail}`
+    );
+  }
+
+  if (!active.email) {
+    throw new Error(
+      `Configured AGENT_EMAIL=${expectedEmail}, but gws did not return a Gmail address for userId "me". ` +
+      `Raw response: ${active.raw}`
+    );
+  }
+
+  if (active.email !== expectedEmail) {
+    throw new Error(
+      `Configured AGENT_EMAIL=${expectedEmail}, but gws is authenticated as ${active.email}. ` +
+      `Update AGENT_EMAIL or point gws at the correct credentials.`
+    );
+  }
+
+  cachedIdentityCheck = { email: expectedEmail, verifiedAt: Date.now() };
+}
+
+async function ensureGmailIdentity(): Promise<void> {
+  await verifyGoogleWorkspaceIdentity();
 }
 
 // ─── Gmail ───────────────────────────────────────────────────────────────────
@@ -27,6 +112,7 @@ export const listEmails = tool(
   },
   async (args) => {
     try {
+      await ensureGmailIdentity();
       const q = args.query ?? "is:inbox";
       const params = JSON.stringify({ userId: "me", q, maxResults: args.maxResults ?? 10 });
       const output = await gws("gmail", "users", "messages", "list", "--params", params);
@@ -43,6 +129,7 @@ export const readEmail = tool(
   { messageId: z.string().describe("The Gmail message ID") },
   async (args) => {
     try {
+      await ensureGmailIdentity();
       const params = JSON.stringify({ userId: "me", id: args.messageId, format: "full" });
       const output = await gws("gmail", "users", "messages", "get", "--params", params);
       return { content: [{ type: "text" as const, text: output }] };
@@ -65,6 +152,7 @@ export const sendEmail = tool(
   },
   async (args) => {
     try {
+      await ensureGmailIdentity();
       if (!args.body && !args.bodyHtml) {
         return { content: [{ type: "text" as const, text: "Error: either body or bodyHtml is required." }] };
       }
@@ -111,6 +199,7 @@ export const searchEmails = tool(
   },
   async (args) => {
     try {
+      await ensureGmailIdentity();
       const params = JSON.stringify({ userId: "me", q: args.query, maxResults: args.maxResults ?? 10 });
       const output = await gws("gmail", "users", "messages", "list", "--params", params);
       return { content: [{ type: "text" as const, text: output || "No emails match that query." }] };

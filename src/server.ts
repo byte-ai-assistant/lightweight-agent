@@ -4,6 +4,7 @@ import next from "next";
 import { startTelegramBot, sendTelegramMessage } from "./telegram/bot.js";
 import { restoreCronJobs, setCronTriggerHandler } from "./agent/tools/cron.js";
 import { runAgent, loadSessions, cleanupStaleSessions } from "./agent/index.js";
+import { verifyGoogleWorkspaceIdentity } from "./agent/tools/google.js";
 import { handleCommand, checkRestartMarker } from "./commands.js";
 import { initMemoryIndex } from "./agent/memory/index.js";
 import { consolidateUnprocessedSessions } from "./agent/consolidation.js";
@@ -27,6 +28,12 @@ async function main() {
   await initMemoryIndex();
   loadSessions();
   cleanupStaleSessions();
+
+  if (process.env.AGENT_EMAIL?.trim()) {
+    await verifyGoogleWorkspaceIdentity();
+    console.log(`Google Workspace identity verified for ${process.env.AGENT_EMAIL}`);
+  }
+
   setInterval(cleanupStaleSessions, 60 * 60 * 1000); // hourly cleanup
 
   // 2b. Nightly memory consolidation (catches low-volume days)

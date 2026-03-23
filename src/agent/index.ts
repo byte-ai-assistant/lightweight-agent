@@ -41,6 +41,7 @@ import { loadAllSkills } from "./skills/loader.js";
 import { buildRegistry, formatRegistryForPrompt, getRegistryStats } from "./skills/registry.js";
 import { loadSkillTool, initializeSkillCache } from "./skills/tools/load.js";
 import { FullSkill } from "./skills/types.js";
+import { getConfiguredAgentEmail } from "./tools/google.js";
 
 const MEMORY_DIR = path.resolve("memory");
 const SKILLS_DIR = path.resolve("skills");
@@ -344,6 +345,7 @@ export async function runAgent(
     autoRetrieveChatGists(message),
   ]);
   const { registryPrompt: skillIndex, skillsCache } = await loadSkillRegistry();
+  const agentEmail = getConfiguredAgentEmail();
 
   // Initialize skill cache for load_skill tool
   initializeSkillCache(skillsCache);
@@ -356,6 +358,9 @@ export async function runAgent(
     : "";
 
   const systemPrompt = `You are Lightweight Agent, a personal AI assistant. You have persistent memory, full Google Workspace access, web search, cron jobs, skills, and full shell/filesystem access.
+
+## Agent Identity
+- Primary email: ${agentEmail || "(not configured)"}
 
 ## Your Capabilities
 - **Memory**: Read/write QMD files for long-term memory. Memories are automatically searched for relevance. Use memory_search for deeper queries.

@@ -273,6 +273,13 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_ALLOWED_USERS=123456789
 ```
 
+Recommended additions if you want the agent to have its own explicit Google Workspace identity:
+
+```env
+AGENT_EMAIL=agent@example.com
+GWS_CREDENTIALS_FILE=/absolute/path/to/gws-credentials.json
+```
+
 Recommended additions if you want voice replies:
 
 ```env
@@ -426,7 +433,7 @@ If you want Gmail, Calendar, Drive, Docs, Sheets, Tasks, or Contacts tools:
 ```bash
 brew install googleworkspace-cli
 gws --version
-gws auth login
+gws auth setup
 ```
 
 Then confirm the binary path matches what this repo expects:
@@ -437,8 +444,10 @@ which gws
 
 Important:
 
-- the current code expects `gws` at `/opt/homebrew/bin/gws`
-- if your `gws` binary is elsewhere, update that path
+- the default code path is `/opt/homebrew/bin/gws`
+- if your `gws` binary is elsewhere, set `GWS_BINARY`
+- if you want a dedicated agent mailbox, export credentials for that mailbox and set `GWS_CREDENTIALS_FILE`
+- if `AGENT_EMAIL` is set, the server verifies that `gws gmail users getProfile --params '{"userId":"me"}'` resolves to that exact address before startup continues
 
 ### 7. Customize the starter memory
 
@@ -593,10 +602,20 @@ The Google tools shell out to the `gws` CLI for:
 Setup:
 
 1. Install `gws`
-2. Run `gws auth login`
-3. Confirm the binary path in `src/agent/tools/google.ts`
+2. Authenticate the mailbox you want the agent to own
+3. Set `AGENT_EMAIL` to that mailbox
+4. If you keep dedicated `gws` credentials in a file, set `GWS_CREDENTIALS_FILE`
+5. Confirm the binary path via `GWS_BINARY` if needed
 
-The current code expects `gws` at `/opt/homebrew/bin/gws`.
+Example explicit setup:
+
+```env
+AGENT_EMAIL=agent@example.com
+GWS_CREDENTIALS_FILE=/absolute/path/to/gws-credentials.json
+GWS_BINARY=/opt/homebrew/bin/gws
+```
+
+At startup, this repo now verifies that the configured `AGENT_EMAIL` matches the active Gmail identity returned by `gws`.
 
 ### Audio transcription
 
