@@ -128,31 +128,34 @@ The agent can discover available skills and load one on demand using the built-i
 
 ## Quick Start
 
-1. Clone the repo.
-2. Install dependencies:
+1. Clone the repo and install dependencies:
 
 ```bash
+git clone https://github.com/byte-ai-assistant/lightweight-agent.git
+cd lightweight-agent
 npm install
 ```
 
-3. Create `.env.local` from the example:
+2. Run the interactive setup:
 
 ```bash
-cp .env.example .env.local
+npm run setup
 ```
 
-4. Fill in the values you want to enable.
+This walks you through API keys, Telegram, Google Workspace, voice, and your initial agent context (name, goals, key people, projects). It writes `.env.local` and `memory/*.qmd` for you.
 
-5. Start the app:
+3. Start the app:
 
 ```bash
 npm run dev
 ```
 
-6. Open:
+4. Open:
 
 - Web UI: `http://localhost:3000`
 - Chat API: `POST /api/chat`
+
+You can also set things up manually — see the step-by-step guide below.
 
 ## Step-By-Step Setup
 
