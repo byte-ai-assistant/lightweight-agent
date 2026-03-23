@@ -2,6 +2,11 @@ import fs from "fs";
 import path from "path";
 import { getActiveSessions, getSessionInfo, clearSession } from "./agent/index.js";
 import { getActiveCronCount } from "./agent/tools/cron.js";
+import {
+  getCachedVerifiedAgentEmail,
+  getConfiguredAgentEmail,
+  getConfiguredGwsCredentialsFile,
+} from "./agent/tools/google.js";
 import { loadBoard } from "./agent/tools/projects.js";
 
 const RESTART_MARKER = path.resolve("data/.restart-pending");
@@ -38,6 +43,13 @@ function handleStatus(userId: string): string {
   }
 
   lines.push(`Cron jobs: ${getActiveCronCount()} active`);
+
+  const configuredAgentEmail = getConfiguredAgentEmail();
+  const verifiedAgentEmail = getCachedVerifiedAgentEmail();
+  const credentialsFile = getConfiguredGwsCredentialsFile();
+  lines.push(`Agent email: ${configuredAgentEmail ?? "not configured"}`);
+  lines.push(`Gmail identity: ${verifiedAgentEmail ?? "not yet verified"}`);
+  lines.push(`GWS credentials: ${credentialsFile ?? "default auth store"}`);
 
   try {
     const board = loadBoard();

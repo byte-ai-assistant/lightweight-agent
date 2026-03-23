@@ -45,6 +45,17 @@ export function getConfiguredAgentEmail(): string | null {
   return email || null;
 }
 
+export function getConfiguredGwsCredentialsFile(): string | null {
+  const file =
+    process.env.GWS_CREDENTIALS_FILE?.trim() ||
+    process.env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE?.trim();
+  return file || null;
+}
+
+export function getCachedVerifiedAgentEmail(): string | null {
+  return cachedIdentityCheck?.email ?? null;
+}
+
 export async function getActiveGmailIdentity(): Promise<GmailIdentity> {
   const raw = await gws("gmail", "users", "getProfile", "--params", JSON.stringify({ userId: "me" }));
 
