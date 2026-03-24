@@ -448,7 +448,12 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
     ],
     permissionMode: "bypassPermissions",
     allowDangerouslySkipPermissions: true,
-    mcpServers: { agent: toolServer },
+    mcpServers: {
+      agent: toolServer,
+      ...(process.env.EXA_API_KEY
+        ? { exa: { type: "http" as const, url: `https://mcp.exa.ai/mcp?exaApiKey=${process.env.EXA_API_KEY}` } }
+        : {}),
+    },
     maxTurns: 100,
     stderr: (data: string) => process.stderr.write(`[agent] ${data}\n`),
     ...(sessionId ? { resume: sessionId } : {}),
@@ -479,6 +484,22 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
           messageCount: (sessions.get(userId)?.messageCount ?? 0) + 1,
         });
         saveSessions();
+      }
+
+      // Log tool use
+      if (msg.type === "tool_use_summary") {
+        process.stderr.write(`[tool] ${(msg as any).summary}\n`);
+      }
+      // Log assistant messages that contain tool_use blocks
+      if (msg.type === "assistant") {
+        const content = (msg as any).message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "tool_use") {
+              process.stderr.write(`[tool-call] ${block.name}(${JSON.stringify(block.input).slice(0, 200)})\n`);
+            }
+          }
+        }
       }
 
       // Capture final result + token usage logging
