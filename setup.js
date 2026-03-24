@@ -187,7 +187,7 @@ const ENV_PATH = join(ROOT, ".env.local");
 const MEMORY_DIR = join(ROOT, "memory");
 
 const env = {};
-const enabled = { telegram: false, google: false, voice: false };
+const enabled = { telegram: false, google: false, voice: false, exa: false };
 
 async function main() {
   const existing = loadExistingEnv();
@@ -323,6 +323,26 @@ async function main() {
     }
   }
 
+  // ── Exa Web Search ──────────────────────────────────────────────
+
+  heading("5. Exa Web Search (optional)");
+
+  const hadExa = !!existing.EXA_API_KEY;
+  const wantExa = hadExa
+    ? !(await confirm("Exa web search is already configured. Skip?"))
+    : await confirm("Set up Exa web search?", false);
+
+  if (wantExa) {
+    if (!hadExa) {
+      info("\nExa gives your agent real-time web search, code context, and company research.");
+      info("Get an API key at https://dashboard.exa.ai/api-keys\n");
+    }
+    env.EXA_API_KEY = await askSecret("Exa API key", existing.EXA_API_KEY || "");
+    if (env.EXA_API_KEY) {
+      enabled.exa = true;
+    }
+  }
+
   // ── Write .env.local ──────────────────────────────────────────────
 
   writeEnvFile();
@@ -333,7 +353,7 @@ async function main() {
 
   // ── Dependencies ──────────────────────────────────────────────────
 
-  heading("6. Dependencies");
+  heading("7. Dependencies");
 
   if (!existsSync(join(ROOT, "node_modules"))) {
     info("node_modules not found. Running npm install...\n");
@@ -351,7 +371,7 @@ async function main() {
 }
 
 function writeEnvFile() {
-  heading("5. Writing .env.local");
+  heading("6. Writing .env.local");
 
   const lines = [];
   const add = (key, value, comment) => {
@@ -385,6 +405,10 @@ function writeEnvFile() {
   if (env.ELEVEN_LABS_API_KEY) {
     add("ELEVEN_LABS_API_KEY", env.ELEVEN_LABS_API_KEY, "Voice");
     add("ELEVEN_LABS_VOICE_ID", env.ELEVEN_LABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb");
+  }
+
+  if (env.EXA_API_KEY) {
+    add("EXA_API_KEY", env.EXA_API_KEY, "Exa web search");
   }
 
   writeFileSync(ENV_PATH, lines.join("\n") + "\n");
@@ -654,6 +678,7 @@ function finish() {
   if (enabled.telegram) success("Telegram bot");
   if (enabled.google) success("Google Workspace tools");
   if (enabled.voice) success("ElevenLabs voice replies");
+  if (enabled.exa) success("Exa web search");
 
   console.log("");
   info("Next steps:");
