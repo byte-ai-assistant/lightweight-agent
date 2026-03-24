@@ -45,8 +45,12 @@ async function main() {
   cleanupStaleSessions();
 
   if (process.env.AGENT_EMAIL?.trim()) {
-    await verifyGoogleWorkspaceIdentity();
-    console.log(`Google Workspace identity verified for ${process.env.AGENT_EMAIL}`);
+    try {
+      await verifyGoogleWorkspaceIdentity();
+      console.log(`Google Workspace identity verified for ${process.env.AGENT_EMAIL}`);
+    } catch (err: any) {
+      console.warn(`Google Workspace verification failed (non-fatal): ${err.message}`);
+    }
   }
 
   setInterval(cleanupStaleSessions, 60 * 60 * 1000); // hourly cleanup
