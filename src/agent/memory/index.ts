@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
-import { MEMORY_DIR, DATA_DIR, DB_PATH } from "../../paths.js";
+import { MEMORY_DIR, DATA_DIR, DB_PATH, RUNTIME_DIR } from "../../paths.js";
 const BASE_CONTEXT = "base-context.qmd";
 
 export interface SearchResult {
@@ -21,6 +21,9 @@ export function getDb(): Database.Database {
 
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(RUNTIME_DIR)) {
+    fs.mkdirSync(RUNTIME_DIR, { recursive: true });
   }
 
   db = new Database(DB_PATH);
