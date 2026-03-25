@@ -4,8 +4,7 @@ import cron from "node-cron";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-
-const CRON_FILE = path.resolve("data/cron-jobs.json");
+import { CRON_FILE } from "../../paths.js";
 
 interface CronJob {
   id: string;

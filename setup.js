@@ -184,10 +184,13 @@ function loadExistingContext() {
 
 const ROOT = resolve(".");
 const ENV_PATH = join(ROOT, ".env.local");
-const MEMORY_DIR = join(ROOT, "memory");
+const PROFILE_DIR = join(ROOT, "profile");
+const MEMORY_DIR = join(PROFILE_DIR, "memory");
+const DATA_DIR = join(PROFILE_DIR, "data");
+const CORE_MEMORY_DIR = join(ROOT, "memory"); // template source
 
 const env = {};
-const enabled = { telegram: false, google: false, voice: false, exa: false };
+const enabled = { telegram: false, google: false, voice: false, exa: false, github: false };
 
 async function main() {
   const existing = loadExistingEnv();
@@ -343,9 +346,34 @@ async function main() {
     }
   }
 
+  // ── GitHub Access ──────────────────────────────────────────────
+
+  heading("6. GitHub Access (optional)");
+
+  const hadGitHub = !!existing.GITHUB_TOKEN;
+  const wantGitHub = hadGitHub
+    ? !(await confirm("GitHub access is already configured. Skip?"))
+    : await confirm("Set up GitHub access?", false);
+
+  if (wantGitHub) {
+    if (!hadGitHub) {
+      info("\nGitHub access lets your agent read and write issues, PRs, and code.");
+      info("Create a personal access token at https://github.com/settings/tokens");
+      info("Recommended scopes: repo, read:org\n");
+    }
+    env.GITHUB_TOKEN = await askSecret("GitHub token", existing.GITHUB_TOKEN || "");
+    if (env.GITHUB_TOKEN) {
+      enabled.github = true;
+    }
+  }
+
   // ── Write .env.local ──────────────────────────────────────────────
 
   writeEnvFile();
+
+  // ── Profile ───────────────────────────────────────────────────────
+
+  await setupProfile();
 
   // ── Agent context ─────────────────────────────────────────────────
 
@@ -353,7 +381,7 @@ async function main() {
 
   // ── Dependencies ──────────────────────────────────────────────────
 
-  heading("7. Dependencies");
+  heading("8. Dependencies");
 
   if (!existsSync(join(ROOT, "node_modules"))) {
     info("node_modules not found. Running npm install...\n");
@@ -411,6 +439,10 @@ function writeEnvFile() {
     add("EXA_API_KEY", env.EXA_API_KEY, "Exa web search");
   }
 
+  if (env.GITHUB_TOKEN) {
+    add("GITHUB_TOKEN", env.GITHUB_TOKEN, "GitHub access");
+  }
+
   writeFileSync(ENV_PATH, lines.join("\n") + "\n");
   success(`Wrote ${ENV_PATH}`);
 }
@@ -418,15 +450,52 @@ function writeEnvFile() {
 function copyTemplates() {
   mkdirSync(MEMORY_DIR, { recursive: true });
   try {
-    const templates = readdirSync(MEMORY_DIR).filter((f) => f.endsWith(".example.qmd"));
+    const templates = readdirSync(CORE_MEMORY_DIR).filter((f) => f.endsWith(".example.qmd"));
     for (const tpl of templates) {
       const target = tpl.replace(".example.qmd", ".qmd");
       const targetPath = join(MEMORY_DIR, target);
       if (!existsSync(targetPath)) {
-        copyFileSync(join(MEMORY_DIR, tpl), targetPath);
+        copyFileSync(join(CORE_MEMORY_DIR, tpl), targetPath);
       }
     }
   } catch { /* ignore */ }
+}
+
+async function setupProfile() {
+  heading("Profile Setup");
+  info("profile/ will hold your memories, skills, and data (cron jobs, projects).");
+  info("It's gitignored from the core repo and can be its own git repo.\n");
+
+  mkdirSync(join(PROFILE_DIR, "memory"), { recursive: true });
+  mkdirSync(join(PROFILE_DIR, "skills"), { recursive: true });
+  mkdirSync(join(PROFILE_DIR, "data"), { recursive: true });
+  success("Created profile/ directories");
+
+  const profileGitignore = [
+    "# Ephemeral runtime state — do not commit",
+    "data/memory-index.sqlite",
+    "data/memory-index.sqlite-shm",
+    "data/memory-index.sqlite-wal",
+    "data/sessions.json",
+    "data/chat-history/",
+    "data/.restart-pending",
+  ].join("\n") + "\n";
+  writeFileSync(join(PROFILE_DIR, ".gitignore"), profileGitignore);
+  success("Wrote profile/.gitignore");
+
+  if (!existsSync(join(PROFILE_DIR, ".git"))) {
+    const wantGit = await confirm("Initialize profile/ as its own git repo?");
+    if (wantGit) {
+      try {
+        execSync("git init", { cwd: PROFILE_DIR, stdio: "inherit" });
+        success("Initialized git repo in profile/");
+      } catch {
+        warn("git init failed. Run it manually: cd profile && git init");
+      }
+    }
+  } else {
+    success("profile/ already has a git repo.");
+  }
 }
 
 async function setupAgentContext() {
@@ -682,7 +751,7 @@ function finish() {
 
   console.log("");
   info("Next steps:");
-  info("  1. Review and edit memory/*.qmd to add more context");
+  info("  1. Review and edit profile/memory/*.qmd to add more context");
   info("  2. Run: npm run dev");
   info("  3. Open: http://localhost:" + (env.PORT || "3000"));
   if (enabled.telegram) info("  4. Open your bot in Telegram and send a message");

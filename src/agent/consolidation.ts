@@ -1,11 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
-import { getDb } from "./memory/index.js";
-import { indexFile } from "./memory/index.js";
-
-const MEMORY_DIR = path.resolve("memory");
-const HISTORY_DIR = path.resolve("data/chat-history");
+import { getDb, indexFile } from "./memory/index.js";
+import { MEMORY_DIR, HISTORY_DIR } from "../paths.js";
 
 // ── Schema ────────────────────────────────────────────────────────────
 

@@ -2,10 +2,7 @@ import Database from "better-sqlite3";
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
-
-const MEMORY_DIR = path.resolve("memory");
-const DATA_DIR = path.resolve("data");
-const DB_PATH = path.join(DATA_DIR, "memory-index.sqlite");
+import { MEMORY_DIR, DATA_DIR, DB_PATH } from "../../paths.js";
 const BASE_CONTEXT = "base-context.qmd";
 
 export interface SearchResult {

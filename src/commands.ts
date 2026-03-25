@@ -8,8 +8,7 @@ import {
   getConfiguredGwsCredentialsFile,
 } from "./agent/tools/google.js";
 import { loadBoard } from "./agent/tools/projects.js";
-
-const RESTART_MARKER = path.resolve("data/.restart-pending");
+import { RESTART_MARKER } from "./paths.js";
 
 const startTime = Date.now();
 

@@ -2,8 +2,7 @@ import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import fs from "fs";
 import path from "path";
-
-const PROJECTS_FILE = path.resolve("data/projects.json");
+import { PROJECTS_FILE } from "../../paths.js";
 
 interface Task {
   id: number;

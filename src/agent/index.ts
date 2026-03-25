@@ -2,6 +2,7 @@ import { query, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKResultMessage, SDKSystemMessage, Options } from "@anthropic-ai/claude-agent-sdk";
 import fs from "fs";
 import path from "path";
+import { MEMORY_DIR, SKILLS_DIR, SESSIONS_FILE } from "../paths.js";
 
 
 // Memory tools
@@ -43,9 +44,6 @@ import { loadSkillTool, initializeSkillCache } from "./skills/tools/load.js";
 import { FullSkill } from "./skills/types.js";
 import { getConfiguredAgentEmail } from "./tools/google.js";
 
-const MEMORY_DIR = path.resolve("memory");
-const SKILLS_DIR = path.resolve("skills");
-const SESSIONS_FILE = path.resolve("data/sessions.json");
 const STATIC_CACHE_TTL = 60_000;
 const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const SESSION_MAX_MESSAGES = 100;
@@ -452,6 +450,16 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
       agent: toolServer,
       ...(process.env.EXA_API_KEY
         ? { exa: { type: "http" as const, url: `https://mcp.exa.ai/mcp?exaApiKey=${process.env.EXA_API_KEY}` } }
+        : {}),
+      ...(process.env.GITHUB_TOKEN
+        ? {
+            github: {
+              type: "stdio" as const,
+              command: "npx",
+              args: ["-y", "@modelcontextprotocol/server-github"],
+              env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN },
+            },
+          }
         : {}),
     },
     maxTurns: 100,

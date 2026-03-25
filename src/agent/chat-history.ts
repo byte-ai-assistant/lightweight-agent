@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { getDb, getEmbedding } from "./memory/index.js";
-
-const HISTORY_DIR = path.resolve("data/chat-history");
+import { HISTORY_DIR } from "../paths.js";
 
 export interface ChatEntry {
   timestamp: string;

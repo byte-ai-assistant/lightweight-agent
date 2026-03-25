@@ -3,8 +3,7 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 import { indexFile, removeFileFromIndex } from "../memory/index.js";
-
-const MEMORY_DIR = path.resolve("memory");
+import { MEMORY_DIR } from "../../paths.js";
 
 function ensureMemoryDir() {
   if (!fs.existsSync(MEMORY_DIR)) {
