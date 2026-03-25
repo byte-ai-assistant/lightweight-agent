@@ -93,6 +93,35 @@ function loadBaseContext(): string {
   return value;
 }
 
+function parseBaseContextField(content: string, fieldName: string): string {
+  const m = content.match(new RegExp(`^- ${fieldName}:\\s*(.+)$`, "m"));
+  const v = m?.[1]?.trim();
+  return v && v !== "(not set)" ? v : "";
+}
+
+function buildSystemPromptOpening(baseContext: string): string {
+  if (!baseContext) {
+    return "You are Lightweight Agent, a personal AI assistant. You have persistent memory, full Google Workspace access, web search, cron jobs, skills, and full shell/filesystem access.";
+  }
+
+  const customPrompt = parseBaseContextField(baseContext, "Custom system prompt");
+  if (customPrompt) return customPrompt;
+
+  const name = parseBaseContextField(baseContext, "Name") || "Lightweight Agent";
+  const role = parseBaseContextField(baseContext, "Role");
+  const expertise = parseBaseContextField(baseContext, "Expertise");
+  const personality = parseBaseContextField(baseContext, "Personality");
+
+  let opening = `You are ${name}`;
+  if (role) opening += `, ${role}`;
+  opening += ".";
+  if (expertise) opening += ` You have deep expertise in ${expertise}.`;
+  if (personality) opening += ` Your personality is ${personality}.`;
+  opening += " You have persistent memory, full Google Workspace access, web search, cron jobs, skills, and full shell/filesystem access.";
+
+  return opening;
+}
+
 function loadProjectBoard(): string {
   if (cachedProjectBoard && Date.now() < cachedProjectBoard.expiresAt) {
     return cachedProjectBoard.value;
@@ -355,7 +384,7 @@ export async function runAgent(
     ? `\n\n## Past Conversations\n${chatGists}`
     : "";
 
-  const systemPrompt = `You are Lightweight Agent, a personal AI assistant. You have persistent memory, full Google Workspace access, web search, cron jobs, skills, and full shell/filesystem access.
+  const systemPrompt = `${buildSystemPromptOpening(baseContext)}
 
 ## Agent Identity
 - Primary email: ${agentEmail || "(not configured)"}
