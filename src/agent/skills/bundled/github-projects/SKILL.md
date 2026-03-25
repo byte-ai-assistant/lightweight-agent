@@ -5,8 +5,6 @@ metadata:
   openclaw:
     category: "project-management"
     requires:
-      env:
-        - GITHUB_TOKEN
       bins:
         - gh
 ---
