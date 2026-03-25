@@ -116,7 +116,9 @@ function parseQmdList(content, heading) {
 
 function loadExistingContext() {
   const ctx = {
-    agentName: "", agentRole: "", replyStyle: "", rules: [],
+    agentName: "", agentRole: "", replyStyle: "",
+    expertise: "", personality: "", customSystemPrompt: "",
+    rules: [],
     name: "", role: "", timezone: "",
     goals: [], people: [], projects: [],
   };
@@ -127,6 +129,9 @@ function loadExistingContext() {
     ctx.agentName = parseQmdField(content, "Name");
     ctx.agentRole = parseQmdField(content, "Role");
     ctx.replyStyle = parseQmdField(content, "Reply style");
+    ctx.expertise = parseQmdField(content, "Expertise");
+    ctx.personality = parseQmdField(content, "Personality");
+    ctx.customSystemPrompt = parseQmdField(content, "Custom system prompt");
     ctx.rules = parseQmdList(content, "Always Consider");
     // User fields — in "About the User" section, re-parse with section scope
     const userSection = content.match(/# About the User\s*\n([\s\S]*?)(?=\n#|$)/);
@@ -528,6 +533,9 @@ async function setupAgentContext() {
   const agentName = await ask("Agent name", ctx.agentName || "");
   const agentRole = await ask("Agent role", ctx.agentRole || "");
   const replyStyle = await ask("How should it reply?", ctx.replyStyle || "concise and direct");
+  const expertise = await ask("Areas of expertise (comma-separated)", ctx.expertise || "");
+  const personality = await ask("Personality traits", ctx.personality || "");
+  const customSystemPrompt = await ask("Custom system prompt (optional, overrides auto-generated)", ctx.customSystemPrompt || "");
 
   console.log("");
   info("Anything the agent should always keep in mind?");
@@ -575,6 +583,9 @@ description: "Always-loaded background context for your agent"
 - Name: ${agentName || "(not set)"}
 - Role: ${agentRole || "(not set)"}
 - Reply style: ${replyStyle}
+- Expertise: ${expertise || "(not set)"}
+- Personality: ${personality || "(not set)"}
+- Custom system prompt: ${customSystemPrompt || "(not set)"}
 
 # About the User
 
