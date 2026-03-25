@@ -28,6 +28,27 @@ function askSecret(question, existing) {
   });
 }
 
+async function askMultiline(question, existing) {
+  if (existing) {
+    const preview = existing.length > 80 ? existing.slice(0, 80) + "…" : existing;
+    info(`Current: ${preview}`);
+    const keep = await confirm("Keep existing value?");
+    if (keep) return existing;
+  }
+  info(`${question}`);
+  info("Type your text. Enter a blank line to finish.\n");
+  const lines = [];
+  while (true) {
+    const line = await new Promise((resolve) => {
+      rl.question("  ", (answer) => resolve(answer));
+    });
+    if (line.trim() === "" && lines.length > 0) break;
+    if (line.trim() === "" && lines.length === 0) return existing || "";
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
 function mask(secret) {
   if (!secret) return "";
   if (secret.length <= 8) return "****";
@@ -117,7 +138,7 @@ function parseQmdList(content, heading) {
 function loadExistingContext() {
   const ctx = {
     agentName: "", agentRole: "", replyStyle: "",
-    expertise: "", personality: "", customSystemPrompt: "",
+    expertise: "", customSystemPrompt: "",
     rules: [],
     name: "", role: "", timezone: "",
     goals: [], people: [], projects: [],
@@ -130,7 +151,6 @@ function loadExistingContext() {
     ctx.agentRole = parseQmdField(content, "Role");
     ctx.replyStyle = parseQmdField(content, "Reply style");
     ctx.expertise = parseQmdField(content, "Expertise");
-    ctx.personality = parseQmdField(content, "Personality");
     ctx.customSystemPrompt = parseQmdField(content, "Custom system prompt");
     ctx.rules = parseQmdList(content, "Always Consider");
     // User fields — in "About the User" section, re-parse with section scope
@@ -534,8 +554,7 @@ async function setupAgentContext() {
   const agentRole = await ask("Agent role", ctx.agentRole || "");
   const replyStyle = await ask("How should it reply?", ctx.replyStyle || "concise and direct");
   const expertise = await ask("Areas of expertise (comma-separated)", ctx.expertise || "");
-  const personality = await ask("Personality traits", ctx.personality || "");
-  const customSystemPrompt = await ask("Custom system prompt (optional, overrides auto-generated)", ctx.customSystemPrompt || "");
+  const customSystemPrompt = await askMultiline("Custom system prompt (optional, overrides auto-generated)", ctx.customSystemPrompt || "");
 
   console.log("");
   info("Anything the agent should always keep in mind?");
@@ -584,7 +603,6 @@ description: "Always-loaded background context for your agent"
 - Role: ${agentRole || "(not set)"}
 - Reply style: ${replyStyle}
 - Expertise: ${expertise || "(not set)"}
-- Personality: ${personality || "(not set)"}
 - Custom system prompt: ${customSystemPrompt || "(not set)"}
 
 # About the User
@@ -621,20 +639,21 @@ ${rulesSection}
     const keepGoals = await confirm("Keep existing goals?");
     if (keepGoals) {
       var goals = [...ctx.goals];
-      info("Add more goals, or press Enter to continue.\n");
     } else {
       var goals = [];
-      info("Enter new goals. Press Enter on an empty line when done.\n");
     }
   } else {
     var goals = [];
-    info("What are you currently focused on? Enter goals one per line.");
-    info("Press Enter on an empty line when done.\n");
   }
-  while (true) {
-    const goal = await ask("  Goal (blank to finish)");
-    if (!goal) break;
-    goals.push(goal);
+  const wantAddGoals = await confirm(goals.length > 0 ? "Add more goals?" : "Add goals?", goals.length === 0);
+  if (wantAddGoals) {
+    info("Each goal can be multi-line. Enter a blank line to finish each goal.\n");
+    while (true) {
+      const goal = await askMultiline("Goal (blank to skip)", "");
+      if (!goal) break;
+      goals.push(goal);
+      console.log("");
+    }
   }
 
   if (goals.length > 0) {

@@ -99,7 +99,6 @@ async function main() {
     let agentName = "Lightweight Agent";
     let agentRole = "";
     let expertise = "";
-    let personality = "";
     try {
       if (fs.existsSync(baseFile)) {
         const content = fs.readFileSync(baseFile, "utf-8");
@@ -111,10 +110,9 @@ async function main() {
         agentName = field("Name") || agentName;
         agentRole = field("Role");
         expertise = field("Expertise");
-        personality = field("Personality");
       }
     } catch { /* use defaults */ }
-    res.json({ name: agentName, role: agentRole, expertise, personality });
+    res.json({ name: agentName, role: agentRole, expertise });
   });
 
   // All other routes -> Next.js

@@ -110,13 +110,10 @@ function buildSystemPromptOpening(baseContext: string): string {
   const name = parseBaseContextField(baseContext, "Name") || "Lightweight Agent";
   const role = parseBaseContextField(baseContext, "Role");
   const expertise = parseBaseContextField(baseContext, "Expertise");
-  const personality = parseBaseContextField(baseContext, "Personality");
-
   let opening = `You are ${name}`;
   if (role) opening += `, ${role}`;
   opening += ".";
   if (expertise) opening += ` You have deep expertise in ${expertise}.`;
-  if (personality) opening += ` Your personality is ${personality}.`;
   opening += " You have persistent memory, full Google Workspace access, web search, cron jobs, skills, and full shell/filesystem access.";
 
   return opening;
