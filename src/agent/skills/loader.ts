@@ -1,11 +1,10 @@
 /**
- * Skill loader with hierarchical loading from multiple locations
- * Loads skills from: bundled → managed → workspace → extraDirs (with priority)
+ * Skill loader — loads from bundled (pre-installed) then profile/skills/ (user-added)
+ * Later locations override earlier ones for skills with the same name.
  */
 
 import * as fs from "fs";
 import * as path from "path";
-import { homedir } from "os";
 import matter from "gray-matter";
 import {
   SkillFrontmatter,
@@ -15,7 +14,8 @@ import {
   ByteConfig,
 } from "./types.js";
 import { checkRequirements } from "./gating.js";
-import { loadConfig, getExtraDirs, isSkillEnabled, getSkillConfig } from "./config.js";
+import { loadConfig, isSkillEnabled, getSkillConfig } from "./config.js";
+import { SKILLS_DIR } from "../../paths.js";
 
 /**
  * Base skill loading locations in priority order (later overrides earlier)
@@ -26,28 +26,16 @@ const BASE_SKILL_LOCATIONS: Array<{ type: SkillLocation; path: string }> = [
     path: path.join(process.cwd(), "src", "agent", "skills", "bundled"),
   },
   {
-    type: "managed",
-    path: path.join(homedir(), ".lightweight-agent", "skills"),
-  },
-  {
     type: "workspace",
-    path: path.join(process.cwd(), "skills"),
+    path: SKILLS_DIR, // user-added skills (profile/skills/)
   },
 ];
 
 /**
- * Build the full list of skill locations including config extraDirs
+ * Build the full list of skill locations
  */
 function getSkillLocations(config: ByteConfig): Array<{ type: SkillLocation; path: string }> {
-  const locations = [...BASE_SKILL_LOCATIONS];
-
-  // Append extra directories from config (treated as managed-priority)
-  const extraDirs = getExtraDirs(config);
-  for (const dir of extraDirs) {
-    locations.push({ type: "managed", path: dir });
-  }
-
-  return locations;
+  return [...BASE_SKILL_LOCATIONS];
 }
 
 /**
