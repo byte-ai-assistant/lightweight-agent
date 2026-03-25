@@ -10,6 +10,7 @@ import { verifyGoogleWorkspaceIdentity } from "./agent/tools/google.js";
 import { handleCommand, checkRestartMarker } from "./commands.js";
 import { initMemoryIndex } from "./agent/memory/index.js";
 import { consolidateUnprocessedSessions } from "./agent/consolidation.js";
+import { MEMORY_DIR } from "./paths.js";
 import cron from "node-cron";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -94,22 +95,26 @@ async function main() {
 
   // API: Agent identity for the web UI
   server.get("/api/identity", (_req, res) => {
-    const memoryDir = path.resolve("memory");
-    const baseFile = path.join(memoryDir, "base-context.qmd");
+    const baseFile = path.join(MEMORY_DIR, "base-context.qmd");
     let agentName = "Lightweight Agent";
     let agentRole = "";
+    let expertise = "";
+    let personality = "";
     try {
       if (fs.existsSync(baseFile)) {
         const content = fs.readFileSync(baseFile, "utf-8");
-        const nameMatch = content.match(/^- Name:\s*(.+)$/m);
-        const roleMatch = content.match(/^- Role:\s*(.+)$/m);
-        const name = nameMatch?.[1]?.trim();
-        const role = roleMatch?.[1]?.trim();
-        if (name && name !== "(not set)") agentName = name;
-        if (role && role !== "(not set)") agentRole = role;
+        const field = (name: string) => {
+          const m = content.match(new RegExp(`^- ${name}:\\s*(.+)$`, "m"));
+          const v = m?.[1]?.trim();
+          return v && v !== "(not set)" ? v : "";
+        };
+        agentName = field("Name") || agentName;
+        agentRole = field("Role");
+        expertise = field("Expertise");
+        personality = field("Personality");
       }
     } catch { /* use defaults */ }
-    res.json({ name: agentName, role: agentRole });
+    res.json({ name: agentName, role: agentRole, expertise, personality });
   });
 
   // All other routes -> Next.js
