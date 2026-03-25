@@ -64,7 +64,7 @@ When a session expires, the agent consolidates the conversation into durable mem
 
 ### Long-term memory
 
-Memory files live in `memory/*.qmd`. The repo ships `*.example.qmd` templates — `npm run setup` copies them into place and personalizes them. Your `*.qmd` files are gitignored so personal context stays local.
+Memory files live in `profile/memory/*.qmd`. The repo ships `memory/*.example.qmd` templates — `npm run setup` copies them into your profile and personalizes them.
 
 The app indexes them into `data/memory-index.sqlite` using SQLite FTS and optional OpenAI embeddings. Relevant memories are automatically retrieved into the prompt.
 
@@ -122,9 +122,18 @@ Example use cases:
 
 ### Skills
 
-Skills are Markdown instruction bundles stored under `skills/<name>/SKILL.md`.
+Skills are Markdown instruction bundles. Each skill is a directory containing a `SKILL.md` file with YAML frontmatter and a body describing what the agent should do.
 
 The agent can discover available skills and load one on demand using the built-in `load_skill` tool.
+
+Skills are loaded from two locations (user-added overrides pre-installed):
+
+| Location | Purpose |
+|---|---|
+| `src/agent/skills/bundled/` | Pre-installed — ships with the repo |
+| `profile/skills/` | User-added — gitignored, lives in your profile repo |
+
+The pre-installed skills include Google Workspace workflows (Gmail, Calendar, Drive, Docs, Sheets, Tasks), browser automation, and voice reply. Add your own skills to `profile/skills/` — they override pre-installed skills of the same name.
 
 ## Quick Start
 
@@ -453,23 +462,22 @@ Important:
 
 ### 7. Customize the starter memory
 
-If you ran `npm run setup`, your memory files are already personalized. You can skip this step.
+If you ran `npm run setup`, your memory files are already in `profile/memory/`. You can skip this step.
 
-If you prefer to set up memory manually, copy the templates:
+If you prefer to set up memory manually:
 
 ```bash
-for f in memory/*.example.qmd; do cp "$f" "${f%.example.qmd}.qmd"; done
+mkdir -p profile/memory
+for f in memory/*.example.qmd; do cp "$f" "profile/memory/$(basename ${f%.example.qmd}.qmd)"; done
 ```
 
 Then edit:
 
-- `memory/base-context.qmd` — agent identity, your name, role, timezone, standing rules
-- `memory/goals.qmd` — current goals and priorities
-- `memory/people.qmd` — key people the agent should know about
-- `memory/projects.qmd` — active projects
-- `memory/decisions.qmd` — durable decisions and workflow rules
-
-These files are gitignored. The `.example.qmd` templates stay in the repo for new clones.
+- `profile/memory/base-context.qmd` — agent identity, your name, role, timezone, standing rules
+- `profile/memory/goals.qmd` — current goals and priorities
+- `profile/memory/people.qmd` — key people the agent should know about
+- `profile/memory/projects.qmd` — active projects
+- `profile/memory/decisions.qmd` — durable decisions and workflow rules
 
 ### 8. Start the app
 
@@ -535,7 +543,7 @@ If `ELEVEN_LABS_API_KEY` is also configured, ask for a spoken reply.
 - `.env.local` exists
 - Claude auth is available
 - `OPENAI_API_KEY` is set if you want memory indexing and Whisper
-- `memory/*.qmd` files exist (run `npm run setup` or copy from templates)
+- `profile/memory/*.qmd` files exist (run `npm run setup` or copy from templates)
 - `npm run dev` starts successfully
 - `http://localhost:3000` loads
 - Telegram responds if enabled
@@ -643,31 +651,89 @@ You need:
 
 The current TTS path expects `ffmpeg` at `/opt/homebrew/bin/ffmpeg`.
 
+## Profile
+
+All your personal customizations live in `profile/` — a single directory that is gitignored from this repo and can be its own git repo.
+
+```
+profile/
+├── .gitignore        ← excludes ephemeral files
+├── memory/           ← your memory files (*.qmd)
+├── skills/           ← your custom skills
+└── data/
+    ├── cron-jobs.json
+    └── projects.json
+```
+
+This separation means:
+
+- **Cloning the repo** gives you the core bot with no personal data
+- **Your profile** is portable — back it up, push it to a private repo, clone it onto another machine
+- **Secrets** stay in `.env.local` (never in the profile)
+
+### Setting up your profile
+
+Run the interactive setup — it creates `profile/`, copies memory templates, and offers to `git init` it:
+
+```bash
+npm run setup
+```
+
+Or initialize manually:
+
+```bash
+mkdir -p profile/memory profile/skills profile/data
+for f in memory/*.example.qmd; do cp "$f" "profile/memory/${f#memory/}"; done
+# rename: remove .example
+for f in profile/memory/*.example.qmd; do mv "$f" "${f%.example.qmd}.qmd"; done
+```
+
+### Migrating your profile to another machine
+
+```bash
+# On the new machine, clone the core bot
+git clone <this-repo> lightweight-agent
+cd lightweight-agent
+npm install
+
+# Clone your profile into the profile/ directory
+git clone <your-profile-repo> profile
+
+# Add your secrets
+cp .env.example .env.local
+# edit .env.local
+
+npm run dev
+```
+
 ## Repo Layout
 
-- `src/server.ts`: server bootstrap
-- `src/agent/index.ts`: main agent runtime
-- `src/agent/tools/`: tool implementations
-- `src/agent/memory/`: memory indexing and retrieval
-- `src/agent/skills/`: skill loading and config
-- `src/telegram/bot.ts`: Telegram bot
-- `src/app/`: Next.js UI and API route
-- `memory/*.example.qmd`: starter memory templates (tracked)
-- `memory/*.qmd`: your personalized memory (gitignored)
-- `skills/`: workspace skills
-- `data/`: runtime state, created locally
+```
+src/
+├── server.ts                  ← server bootstrap
+├── paths.ts                   ← all resolved file paths (reads from profile/)
+├── agent/
+│   ├── index.ts               ← main agent runtime
+│   ├── memory/                ← memory indexing and retrieval
+│   ├── tools/                 ← tool implementations
+│   ├── skills/
+│   │   ├── bundled/           ← default skills (shipped with repo)
+│   │   └── loader.ts          ← loads bundled → profile/skills/
+│   └── consolidation.ts       ← session → memory summarization
+├── telegram/bot.ts            ← Telegram bot
+└── app/                       ← Next.js UI and API route
+
+memory/*.example.qmd           ← starter templates (committed)
+profile/                       ← your personal data (gitignored)
+data/                          ← ephemeral runtime state (gitignored)
+```
 
 ## Making It Your Own
 
-The intended customization points are:
-
-- `memory/base-context.qmd`
-- `memory/goals.qmd`
-- `memory/people.qmd`
-- `memory/projects.qmd`
-- `skills/`
-- the system prompt in `src/agent/index.ts`
-- tool implementations in `src/agent/tools/`
+- Edit `profile/memory/*.qmd` to give the agent context about you and your work
+- Add skills to `profile/skills/` or contribute generic ones to `src/agent/skills/bundled/`
+- Extend tool implementations in `src/agent/tools/`
+- Modify the system prompt in `src/agent/index.ts`
 
 ## Security Notes
 
@@ -679,8 +745,8 @@ The intended customization points are:
 
 ## Suggested Next Steps
 
-- Run `npm run setup` to personalize memory files, or edit `memory/*.qmd` directly
+- Run `npm run setup` to create your profile and personalize memory files
+- Add skills to `profile/skills/` for your own workflows
 - Add or remove tools based on your needs
 - Add auth before exposing the web UI
-- Add tests for critical workflows
 - Point the Google and `ffmpeg` paths to your own environment if needed
