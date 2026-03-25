@@ -586,7 +586,8 @@ async function setupAgentContext() {
   info("-- About You --\n");
   const name = await ask("Your name", ctx.name || "");
   const role = await ask("Your role", ctx.role || "");
-  const timezone = await ask("Your timezone", ctx.timezone || "");
+  const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = await ask("Your timezone", ctx.timezone || detectedTz || "");
 
   const rulesSection = rules.length > 0
     ? `\n# Always Consider\n\n${rules.map((r) => `- ${r}`).join("\n")}\n`
