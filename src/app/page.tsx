@@ -13,6 +13,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [agentName, setAgentName] = useState("Lightweight Agent");
   const [agentRole, setAgentRole] = useState("");
+  const [agentExpertise, setAgentExpertise] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function Home() {
           document.title = data.name;
         }
         if (data.role) setAgentRole(data.role);
+        if (data.expertise) setAgentExpertise(data.expertise);
       })
       .catch(() => {});
   }, []);
@@ -64,6 +66,11 @@ export default function Home() {
         <p style={{ margin: "4px 0 0", fontSize: 13, color: "#888" }}>
           {agentRole || "Personal AI Assistant"}
         </p>
+        {agentExpertise && (
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#666" }}>
+            {agentExpertise}
+          </p>
+        )}
       </div>
 
       {/* Messages */}
