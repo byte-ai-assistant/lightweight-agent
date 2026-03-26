@@ -12,7 +12,7 @@ import { verifyGoogleWorkspaceIdentity } from "./agent/tools/google.js";
 import { handleCommand, checkRestartMarker } from "./commands.js";
 import { initMemoryIndex } from "./agent/memory/index.js";
 import { consolidateUnprocessedSessions } from "./agent/consolidation.js";
-import { MEMORY_DIR } from "./paths.js";
+import { MEMORY_DIR, HISTORY_DIR } from "./paths.js";
 import cron from "node-cron";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -119,6 +119,32 @@ async function main() {
       sendEvent("error", { error: errMsg });
     } finally {
       res.end();
+    }
+  });
+
+  // API: Unified chat history (web + telegram, excluding cron)
+  server.get("/api/history", (_req, res) => {
+    try {
+      if (!fs.existsSync(HISTORY_DIR)) {
+        res.json({ messages: [] });
+        return;
+      }
+      const files = fs.readdirSync(HISTORY_DIR).filter((f) => f.endsWith(".jsonl"));
+      const entries: { timestamp: string; userId: string; userMessage: string; assistantResponse: string }[] = [];
+      for (const file of files) {
+        const lines = fs.readFileSync(path.join(HISTORY_DIR, file), "utf-8").trim().split("\n");
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const entry = JSON.parse(line);
+            if (!entry.userId?.startsWith("cron:")) entries.push(entry);
+          } catch { /* skip malformed lines */ }
+        }
+      }
+      entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      res.json({ messages: entries });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 

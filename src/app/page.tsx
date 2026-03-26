@@ -32,6 +32,22 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    fetch("/api/history")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!Array.isArray(data.messages) || data.messages.length === 0) return;
+        const loaded: Message[] = [];
+        for (const entry of data.messages) {
+          const prefix = entry.userId?.startsWith("telegram:") ? "[Telegram] " : "";
+          loaded.push({ role: "user", content: prefix + entry.userMessage });
+          loaded.push({ role: "assistant", content: entry.assistantResponse });
+        }
+        setMessages(loaded);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
