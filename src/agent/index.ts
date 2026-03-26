@@ -570,8 +570,13 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
         } else if (resultMsg.subtype === "error_max_turns") {
           result = "I hit my processing limit on that one. Could you try breaking it into smaller steps, or send a follow-up to continue?";
         } else {
+          const errorDetail = "errors" in resultMsg ? resultMsg.errors.join("\n") : "";
+          // Detect stale session errors so we can retry fresh
+          if (sessionId && errorDetail.includes("No conversation found with session ID")) {
+            throw new Error(`stale_session: ${errorDetail}`);
+          }
           result = `Error: ${resultMsg.subtype}` +
-            ("errors" in resultMsg ? `\n${resultMsg.errors.join("\n")}` : "");
+            (errorDetail ? `\n${errorDetail}` : "");
         }
         // Log token usage from modelUsage (aggregated across all models)
         const models = resultMsg.modelUsage;
