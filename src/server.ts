@@ -71,7 +71,7 @@ async function main() {
 
   // API: Chat endpoint for web UI
   server.post("/api/chat", async (req, res) => {
-    const { message, userId = "web:anonymous" } = req.body;
+    const { message, userId = "web:anonymous", stream = false } = req.body;
 
     if (!message || typeof message !== "string") {
       res.status(400).json({ error: "message is required" });
@@ -84,14 +84,41 @@ async function main() {
       return;
     }
 
+    if (!stream) {
+      try {
+        const response = await runAgent(userId, message);
+        res.json({ response });
+      } catch (err: any) {
+        const errMsg = err?.message ?? String(err);
+        const errStack = err?.stack ?? "";
+        process.stderr.write(`Chat API error: ${errMsg}\n${errStack}\n`);
+        res.status(500).json({ error: "Agent error", detail: errMsg });
+      }
+      return;
+    }
+
+    // SSE streaming path
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    const sendEvent = (event: string, data: object) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
     try {
-      const response = await runAgent(userId, message);
-      res.json({ response });
+      const response = await runAgent(userId, message, (status) => {
+        sendEvent("status", { text: status });
+      });
+      sendEvent("done", { response });
     } catch (err: any) {
       const errMsg = err?.message ?? String(err);
-      const errStack = err?.stack ?? "";
-      process.stderr.write(`Chat API error: ${errMsg}\n${errStack}\n`);
-      res.status(500).json({ error: "Agent error", detail: errMsg });
+      process.stderr.write(`Chat API error: ${errMsg}\n${err?.stack ?? ""}\n`);
+      sendEvent("error", { error: errMsg });
+    } finally {
+      res.end();
     }
   });
 

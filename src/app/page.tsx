@@ -11,6 +11,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const [agentName, setAgentName] = useState("Lightweight Agent");
   const [agentRole, setAgentRole] = useState("");
   const [agentExpertise, setAgentExpertise] = useState("");
@@ -41,20 +42,54 @@ export default function Home() {
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
+    setStatusText("");
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, stream: true }),
       });
 
-      const data = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.response ?? data.error }]);
+      if (!res.body) {
+        const data = await res.json();
+        setMessages((prev) => [...prev, { role: "assistant", content: data.response ?? data.error }]);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        let eventType = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7);
+          } else if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+            if (eventType === "status") {
+              setStatusText(data.text);
+            } else if (eventType === "done") {
+              setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
+            } else if (eventType === "error") {
+              setMessages((prev) => [...prev, { role: "assistant", content: data.error ?? "Agent error." }]);
+            }
+          }
+        }
+      }
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Connection error." }]);
     } finally {
       setLoading(false);
+      setStatusText("");
     }
   }
 
@@ -137,6 +172,11 @@ export default function Home() {
               <span className="typing-dots">
                 <span>.</span><span>.</span><span>.</span>
               </span>
+              {statusText && (
+                <span style={{ marginLeft: 8, fontSize: 12, color: "#666" }}>
+                  {statusText}
+                </span>
+              )}
             </div>
           </div>
         )}

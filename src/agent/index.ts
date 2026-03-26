@@ -357,9 +357,33 @@ export async function clearSession(userId: string): Promise<boolean> {
   return true;
 }
 
+function friendlyToolName(name: string): string {
+  const map: Record<string, string> = {
+    memory_search: "Searching memory…",
+    read_memory: "Reading memory…",
+    write_memory: "Saving to memory…",
+    update_memory: "Updating memory…",
+    list_memories: "Listing memories…",
+    gmail_list: "Checking email…",
+    gmail_read: "Reading email…",
+    gmail_send: "Sending email…",
+    gmail_search: "Searching email…",
+    calendar_list: "Checking calendars…",
+    calendar_events: "Looking up events…",
+    calendar_create_event: "Creating event…",
+    calendar_search: "Searching calendar…",
+    drive_list: "Browsing files…",
+    drive_search: "Searching Drive…",
+    web_search: "Searching the web…",
+    search_chat_history: "Searching past conversations…",
+  };
+  return map[name] ?? `Using ${name.replace(/_/g, " ")}…`;
+}
+
 export async function runAgent(
   userId: string,
-  message: string
+  message: string,
+  onStatus?: (status: string) => void
 ): Promise<string> {
   const baseContext = loadBaseContext();
   const projectBoard = loadProjectBoard();
@@ -518,6 +542,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
           messageCount: (sessions.get(userId)?.messageCount ?? 0) + 1,
         });
         saveSessions();
+        onStatus?.("Thinking…");
       }
 
       // Log tool use
@@ -531,6 +556,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
           for (const block of content) {
             if (block.type === "tool_use") {
               process.stderr.write(`[tool-call] ${block.name}(${JSON.stringify(block.input).slice(0, 200)})\n`);
+              onStatus?.(friendlyToolName(block.name));
             }
           }
         }
