@@ -6,7 +6,6 @@ data/
 profile/
 tsconfig.tsbuildinfo
 logs/
-projects/
 credentials/
 memory/*.qmd
 !memory/*.example.qmd
@@ -15,3 +14,7 @@ memory/*.qmd
 skills/.DS_Store
 src/.DS_Store
 src/agent/.DS_Store
+.env.local.swp
+*.swp # catch all future swap files
+.env.local.swp
+*.swp

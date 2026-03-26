@@ -6,6 +6,7 @@ const PROFILE_DIR = path.join(ROOT, "profile");
 export const MEMORY_DIR    = path.join(PROFILE_DIR, "memory");
 export const SKILLS_DIR    = path.join(PROFILE_DIR, "skills");
 export const DATA_DIR      = path.join(PROFILE_DIR, "data");
+export const PROJECTS_DIR  = path.join(PROFILE_DIR, "projects");
 export const RUNTIME_DIR   = path.join(ROOT, "data"); // ephemeral: sessions, sqlite, chat-history
 
 export const CRON_FILE     = path.join(DATA_DIR, "cron-jobs.json");

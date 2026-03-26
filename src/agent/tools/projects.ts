@@ -2,7 +2,7 @@ import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import fs from "fs";
 import path from "path";
-import { PROJECTS_FILE } from "../../paths.js";
+import { PROJECTS_FILE, PROJECTS_DIR } from "../../paths.js";
 
 interface Task {
   id: number;
@@ -173,7 +173,7 @@ export const createProject = tool(
     id: z.string().describe("Unique slug ID (e.g. 'my-project')"),
     name: z.string().describe("Human-readable project name"),
     description: z.string().optional().describe("Brief one-line description (shown in board summary)"),
-    location: z.string().optional().describe("Directory path for the project (defaults to projects/<id>/)"),
+    location: z.string().optional().describe("Directory path for the project (defaults to profile/projects/<id>/)"),
     status: z.enum(["active", "complete", "paused"]).optional().describe("Project status (default: active)"),
     notes: z.string().optional().describe("Optional internal notes"),
   },
@@ -184,8 +184,8 @@ export const createProject = tool(
       return { content: [{ type: "text" as const, text: `Project '${args.id}' already exists.` }] };
     }
 
-    // Default location to projects/<id>/ under the working directory
-    const location = args.location || path.resolve("projects", args.id);
+    // Default location to profile/projects/<id>/
+    const location = args.location || path.join(PROJECTS_DIR, args.id);
 
     const now = new Date().toISOString();
     const project: Project = {
