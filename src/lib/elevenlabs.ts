@@ -3,10 +3,11 @@ import { promisify } from "util";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { projectName } from "./project-name.js";
 
 const execFileAsync = promisify(execFile);
 
-const TTS_TMP = path.join(os.tmpdir(), "lightweight-agent-tts");
+const TTS_TMP = path.join(os.tmpdir(), `${projectName()}-tts`);
 const DEFAULT_VOICE_ID = process.env.ELEVEN_LABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
 const DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 

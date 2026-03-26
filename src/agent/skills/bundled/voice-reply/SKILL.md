@@ -38,6 +38,6 @@ User sends a voice message asking "What's the weather like?"
 
 1. Generate your answer text: "It's currently 72 degrees and sunny in San Francisco."
 2. Call `generate_speech` with that text
-3. Respond with: `[[VOICE:/tmp/lightweight-agent-tts/123.ogg]] It's currently 72 degrees and sunny in San Francisco.`
+3. Respond with: `[[VOICE:/tmp/<project-name>-tts/123.ogg]] It's currently 72 degrees and sunny in San Francisco.`
 
 The Telegram bot will send the voice message first, then the text as a follow-up.

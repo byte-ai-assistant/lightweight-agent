@@ -4,10 +4,11 @@ import { promisify } from "util";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { projectName } from "./project-name.js";
 
 const execFileAsync = promisify(execFile);
 
-const WHISPER_TMP = path.join(os.tmpdir(), "lightweight-agent-whisper");
+const WHISPER_TMP = path.join(os.tmpdir(), `${projectName()}-whisper`);
 const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "whisper-1";
 
 function ensureTmpDir() {

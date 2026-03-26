@@ -5,6 +5,7 @@ import os from "os";
 import { runAgent } from "../agent/index.js";
 import { handleCommand } from "../commands.js";
 import { transcribeAudio } from "../lib/whisper.js";
+import { projectName } from "../lib/project-name.js";
 
 const ALLOWED_USERS = (process.env.TELEGRAM_ALLOWED_USERS ?? "")
   .split(",")
@@ -15,7 +16,7 @@ const ALLOWED_USERS = (process.env.TELEGRAM_ALLOWED_USERS ?? "")
  * Download a Telegram file by fileId and return the local path.
  */
 async function downloadTelegramFile(bot: TelegramBot, fileId: string): Promise<string> {
-  const tmpDir = path.join(os.tmpdir(), "lightweight-agent-telegram");
+  const tmpDir = path.join(os.tmpdir(), `${projectName()}-telegram`);
   if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
   const filePath = await bot.downloadFile(fileId, tmpDir);
   return filePath;

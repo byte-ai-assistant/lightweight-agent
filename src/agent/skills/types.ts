@@ -67,7 +67,7 @@ export interface SkillFrontmatter {
 }
 
 /**
- * Per-skill configuration override (from ~/.lightweight-agent/agent.json)
+ * Per-skill configuration override (from ~/.<project-name>/agent.json)
  */
 export interface ByteSkillConfig {
   /** Whether the skill is enabled (default: true) */
@@ -84,7 +84,7 @@ export interface ByteSkillConfig {
 }
 
 /**
- * Top-level agent configuration (from ~/.lightweight-agent/agent.json)
+ * Top-level agent configuration (from ~/.<project-name>/agent.json)
  */
 export interface ByteConfig {
   skills?: {

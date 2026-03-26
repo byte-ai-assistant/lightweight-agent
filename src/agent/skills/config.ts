@@ -1,20 +1,21 @@
 /**
  * Config loader for per-skill overrides and extra directories
- * Reads from ~/.lightweight-agent/agent.json with 60s TTL caching
+ * Reads from ~/.<project-name>/agent.json with 60s TTL caching
  */
 
 import * as fs from "fs";
 import * as path from "path";
 import { homedir } from "os";
 import { ByteConfig, ByteSkillConfig } from "./types.js";
+import { projectName } from "../../lib/project-name.js";
 
-const CONFIG_PATH = path.join(homedir(), ".lightweight-agent", "agent.json");
+const CONFIG_PATH = path.join(homedir(), `.${projectName()}`, "agent.json");
 const CACHE_TTL = 60_000; // 60 seconds
 
 let configCache: { value: ByteConfig; expiresAt: number } | null = null;
 
 /**
- * Load and cache ~/.lightweight-agent/agent.json
+ * Load and cache ~/.<project-name>/agent.json
  * Returns empty config if file is missing or invalid
  */
 export function loadConfig(): ByteConfig {
