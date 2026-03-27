@@ -29,6 +29,8 @@ Before running any commands, extract the following values from your loaded memor
 | `$FE_PROJECT_NUM` | `projects.qmd` → FE Planning project board number |
 | `$BE_PROJECT_NUM` | `projects.qmd` → BE Planning project board number |
 | `$CEO_HANDLE` | `people.qmd` → CEO GitHub handle |
+| `$CTO_HANDLE` | `people.qmd` → CTO GitHub handle |
+| `$EM_HANDLE` | `people.qmd` → Engineering Manager GitHub handle |
 | `$DEV_AGENT_HANDLE` | `people.qmd` → dev agent GitHub handle |
 | `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent GitHub handle |
 
@@ -151,7 +153,39 @@ Filter to issues where any comment from the dev agent's handle contains "blocked
 
 ---
 
-### STATE 2 — Code review approved
+### STATE 2 — Human replied to awaiting issue
+
+**Condition:** An open issue labeled `status:awaiting-human` has a comment from a key human (`$CEO_HANDLE`, `$CTO_HANDLE`, or `$EM_HANDLE`) posted *after* Sparky's escalation comment, and the issue still carries `status:awaiting-human`.
+
+**How to detect:**
+```bash
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "status:awaiting-human" --state open \
+    --json number,title,url,comments
+done
+```
+
+For each issue, sort comments by `createdAt`. Find Sparky's escalation comment (contains `"Dev agent is blocked"`). Then check if any comment from a key human appears after it:
+```bash
+gh issue view ISSUE_NUM --repo REPO --json comments \
+  --jq '[.comments[] | select(
+    .author.login == "$CEO_HANDLE" or
+    .author.login == "$CTO_HANDLE" or
+    .author.login == "$EM_HANDLE"
+  )] | sort_by(.createdAt) | last'
+```
+
+If such a comment exists and is timestamped after the escalation comment → act.
+
+**Action:**
+1. Remove `status:awaiting-human`, add `status:in-development`
+2. Post on the issue:
+   > `@DEV_AGENT_HANDLE — CEO has replied on #ISSUE_NUM. Resuming development.`
+
+---
+
+### STATE 3 — Code review approved
 
 **Condition:** An open issue labeled `status:in-review` has a linked PR with an approved review from the code review agent.
 
@@ -188,7 +222,7 @@ gh pr view PR_NUM --repo REPO \
 
 ---
 
-### STATE 3 — Dev is stale
+### STATE 4 — Dev is stale
 
 **Condition:** An open issue labeled `status:in-development` has had no activity for more than 60 minutes, AND the PM's last comment is not already an unanswered status-check ping.
 
@@ -210,7 +244,7 @@ Post comment: "Status check — @DEV_AGENT_HANDLE please update on progress. Are
 
 ---
 
-### STATE 4 — Backlog has stories, nothing active
+### STATE 5 — Backlog has stories, nothing active
 
 **Condition:** No issues exist across either repo with an active status label (`status:in-development`, `status:ready-for-review`, `status:in-review`, `status:awaiting-human`). At least one of the two project boards has a story with Status = "Backlog" or "Todo".
 
@@ -313,7 +347,7 @@ If a story clearly requires both frontend and backend work, create paired issues
 
 ---
 
-### STATE 5 — Nothing to do (lowest priority)
+### STATE 6 — Nothing to do (lowest priority)
 
 **Condition:** No active issues in either repo AND both project boards have no Backlog/Todo stories.
 
