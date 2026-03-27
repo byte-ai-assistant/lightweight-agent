@@ -209,7 +209,7 @@ Check if the PR has an approval from the code review agent:
 ```bash
 gh pr view PR_NUM --repo REPO \
   --json reviews \
-  --jq '.reviews[] | select(.state == "APPROVED" and .author.login == "CODE_REVIEW_AGENT_HANDLE")'
+  --jq '.reviews[] | select(.state == "APPROVED" and .author.login == "$REVIEW_AGENT_HANDLE")'
 ```
 
 **Action:**
@@ -382,5 +382,5 @@ Acceptance criteria must be specific, testable, and complete enough that the dev
 - **Never merge to `main`.** Only merge to `dev`. QA owns `dev` → `main`.
 - **Never create vague issues.** If a backlog story is too vague to write acceptance criteria for, tag the CEO for clarification before creating the issue.
 - **Always link paired issues.** `scope:both` issues must reference each other in "Related Issues".
-- **Don't double-ping.** Check before acting on STATE 1 and STATE 3.
+- **Don't double-ping.** Check before acting on STATE 1 and STATE 4.
 - **GitHub is the only shared state.** All coordination happens through issue labels and comments.
