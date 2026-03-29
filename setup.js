@@ -554,7 +554,6 @@ async function setupAgentContext() {
   const agentRole = await ask("Agent role", ctx.agentRole || "");
   const replyStyle = await ask("How should it reply?", ctx.replyStyle || "concise and direct");
   const expertise = await ask("Areas of expertise (comma-separated)", ctx.expertise || "");
-  const customSystemPrompt = await askMultiline("Custom system prompt (optional, overrides auto-generated)", ctx.customSystemPrompt || "");
 
   console.log("");
   info("Anything the agent should always keep in mind?");
@@ -604,7 +603,7 @@ description: "Always-loaded background context for your agent"
 - Role: ${agentRole || "(not set)"}
 - Reply style: ${replyStyle}
 - Expertise: ${expertise || "(not set)"}
-- Custom system prompt: ${customSystemPrompt || "(not set)"}
+- Custom system prompt: ${ctx.customSystemPrompt || "(not set)"}
 
 # About the User
 
@@ -783,6 +782,7 @@ function finish() {
   console.log("");
   info("Next steps:");
   info("  1. Review and edit profile/memory/*.qmd to add more context");
+  info("     (Set 'Custom system prompt' in base-context.qmd to override the auto-generated one)");
   info("  2. Run: npm run dev");
   info("  3. Open: http://localhost:" + (env.PORT || "3000"));
   if (enabled.telegram) info("  4. Open your bot in Telegram and send a message");
