@@ -32,9 +32,9 @@ Before running any commands, extract the following values from your loaded memor
 | `$CTO_HANDLE` | `people.qmd` → CTO GitHub handle |
 | `$EM_HANDLE` | `people.qmd` → Engineering Manager GitHub handle |
 | `$DEV_AGENT_HANDLE` | `people.qmd` → dev agent GitHub handle |
-| `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent GitHub handle |
+| `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent GitHub handle (optional) |
 
-If any value is missing from memory, stop and tell the user which fields need to be filled in before the agent can run.
+If any required value is missing from memory, stop and tell the user which fields need to be filled in before the agent can run. `$REVIEW_AGENT_HANDLE` is optional — if not set, PRs will wait for a human reviewer to approve.
 
 ---
 
@@ -85,15 +85,15 @@ Every issue must have exactly one label from each of these three categories:
 ### Scope
 - `scope:frontend` — work only in the frontend repo
 - `scope:backend` — work only in the backend repo
-- `scope:both` — requires both repos (create two linked issues)
+- `scope:both` — paired issues across both repos
 
-### Status
-- `status:in-development` — assigned to dev agent, work in progress
-- `status:ready-for-review` — dev submitted PR, awaiting code review
-- `status:in-review` — code review agent is reviewing
-- `status:changes-requested` — code review requested changes
-- `status:awaiting-human` — blocked on CEO input
-- `status:done` — merged to dev, complete
+### Status (you own transitions marked ✏️)
+- `status:in-development` ✏️ — assigned to dev agent, work in progress
+- `status:ready-for-review` — PR submitted, awaiting code review
+- `status:in-review` — code review in progress
+- `status:changes-requested` — reviewer requested changes
+- `status:awaiting-human` ✏️ — blocked on CEO input
+- `status:done` ✏️ — merged to dev, complete
 
 ---
 
@@ -187,11 +187,14 @@ If such a comment exists and is timestamped after the escalation comment → act
 
 ### STATE 3 — Code review approved
 
-**Condition:** An open issue labeled `status:in-review` has a linked PR with an approved review from the code review agent.
+**Condition:** An open issue labeled `status:ready-for-review` or `status:in-review` has a linked PR with an approved review from any user.
 
 **How to detect:**
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "status:ready-for-review" --state open \
+    --json number,title,url
   gh issue list --repo $REPO \
     --label "status:in-review" --state open \
     --json number,title,url
@@ -205,11 +208,11 @@ gh pr list --repo REPO --state open \
   --jq --arg issue "#ISSUE_NUM" '.[] | select(.body | test($issue))'
 ```
 
-Check if the PR has an approval from the code review agent:
+Check if the PR has an approval from any reviewer:
 ```bash
 gh pr view PR_NUM --repo REPO \
   --json reviews \
-  --jq '.reviews[] | select(.state == "APPROVED" and .author.login == "$REVIEW_AGENT_HANDLE")'
+  --jq '.reviews[] | select(.state == "APPROVED")'
 ```
 
 **Action:**
@@ -217,7 +220,7 @@ gh pr view PR_NUM --repo REPO \
    ```bash
    gh pr merge PR_NUM --repo REPO --merge --base dev
    ```
-2. Remove `status:in-review`, add `status:done`
+2. Remove `status:ready-for-review` and `status:in-review` (whichever is present), add `status:done`
 3. Post on the issue: `Merged to dev. Done.`
 
 ---
