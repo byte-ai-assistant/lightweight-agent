@@ -28,9 +28,9 @@ Before running any commands, extract the following values from your loaded memor
 | `$ORG` | `projects.qmd` → GitHub org name |
 | `$MY_HANDLE` | `people.qmd` → dev agent GitHub handle (your own handle) |
 | `$PM_AGENT_HANDLE` | `people.qmd` → PM agent GitHub handle (Sparky) |
-| `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent GitHub handle |
+| `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent GitHub handle (optional) |
 
-If any value is missing from memory, stop and tell the user which fields need to be filled in before the agent can run.
+If any required value is missing from memory, stop and tell the user which fields need to be filled in before the agent can run. `$REVIEW_AGENT_HANDLE` is optional — if not set, PRs will wait for a human reviewer to approve.
 
 ---
 
@@ -60,12 +60,12 @@ Every issue carries exactly one label from each of these three categories. You r
 - `scope:both` — paired issues across both repos
 
 ### Status (you own transitions marked ✏️)
-- `status:in-development` — assigned to you, work in progress
-- `status:ready-for-review` ✏️ — you submitted a PR, awaiting code review
-- `status:in-review` — code review agent is reviewing
-- `status:changes-requested` — code review requested changes
-- `status:awaiting-human` — blocked on CEO input (set by PM)
-- `status:done` — merged to dev, complete (set by PM)
+- `status:in-development` — assigned to dev agent, work in progress
+- `status:ready-for-review` ✏️ — PR submitted, awaiting code review
+- `status:in-review` — code review in progress
+- `status:changes-requested` — reviewer requested changes
+- `status:awaiting-human` — blocked on CEO input
+- `status:done` — merged to dev, complete
 
 ---
 
@@ -204,14 +204,7 @@ If a PR exists, skip (already in progress). If no PR exists, act.
    ```
 6. Update issue label: remove `status:in-development`, add `status:ready-for-review`
 
-**⚠️ Temporary workaround — no code review agent yet:**
-Until `$REVIEW_AGENT_HANDLE` is configured, the PM agent's STATE 3 cannot fire (it requires `status:in-review` + an approved review). As a temporary measure:
-- After opening the PR, also remove `status:ready-for-review` and add `status:in-review`
-- Approve your own PR:
-  ```bash
-  gh pr review PR_NUM --repo REPO --approve --body "Self-review: implementation matches acceptance criteria. Pending assignment of dedicated code review agent."
-  ```
-- Remove this workaround once `$REVIEW_AGENT_HANDLE` is set in `people.qmd`
+**If `$REVIEW_AGENT_HANDLE` is not set:** skip the `--reviewer` flag when creating the PR. The PR will wait for a human to review and approve. Do not self-approve.
 
 ---
 
