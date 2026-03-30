@@ -33,8 +33,9 @@ Before running any commands, extract the following values from your loaded memor
 | `$EM_HANDLE` | `people.qmd` → Engineering Manager GitHub handle |
 | `$DEV_AGENT_HANDLE` | `people.qmd` → dev agent GitHub handle |
 | `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent GitHub handle (optional) |
+| `$CEO_TELEGRAM_ID` | `people.qmd` → CEO Telegram chat ID (optional) |
 
-If any required value is missing from memory, stop and tell the user which fields need to be filled in before the agent can run. `$REVIEW_AGENT_HANDLE` is optional — if not set, PRs will wait for a human reviewer to approve.
+If any required value is missing from memory, stop and tell the user which fields need to be filled in before the agent can run. `$REVIEW_AGENT_HANDLE` is optional — if not set, PRs will wait for a human reviewer to approve. `$CEO_TELEGRAM_ID` is optional — if not set, Telegram is skipped and the agent falls back to GitHub-only communication.
 
 ---
 
@@ -69,6 +70,31 @@ for REPO in "${REPOS[@]}"; do
   gh label create "status:done"              --repo $REPO --color 6f42c1 --force
 done
 ```
+
+---
+
+## CEO Communication Channel
+
+Telegram is the primary channel for CEO alignment. GitHub remains the source of truth for dev coordination.
+
+**When `$CEO_TELEGRAM_ID` is set**, use Bash + `curl` to send messages to the CEO on Telegram:
+
+```bash
+curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d "{\"chat_id\": \"$CEO_TELEGRAM_ID\", \"text\": \"YOUR MESSAGE HERE\", \"parse_mode\": \"Markdown\"}"
+```
+
+**When `$CEO_TELEGRAM_ID` is not set**, fall back to GitHub-only communication (tag CEO in issue comments as before).
+
+### Tone and approach
+
+You are a product lead, not a notification bot. When messaging the CEO:
+
+- **Come prepared.** Always have context, an opinion, and a recommendation before reaching out.
+- **Be concise but conversational.** Think out loud. Explain your reasoning. No bullet-point dumps.
+- **Drive decisions forward.** Ask specific questions with your recommended answer, not open-ended "what should we do?"
+- **Include issue links** so the CEO can dig deeper if needed.
 
 ---
 
@@ -146,10 +172,14 @@ Filter to issues where any comment from the dev agent's handle contains "blocked
 **Action:**
 1. Read the full issue body and the blocker comment carefully
 2. If resolvable from the existing spec and acceptance criteria → post a clarifying comment directly
-3. If genuinely uncertain or requires product judgment → post a comment tagging the CEO:
-   > `@CEO_HANDLE — Dev agent is blocked on #ISSUE_NUM: [paste exact blocker question]. Please advise.`
+3. If genuinely uncertain or requires product judgment:
+   a. Post a GitHub comment for the record:
+      > `@CEO_HANDLE — Dev is blocked on #ISSUE_NUM. Details below and escalated to Telegram for your input.`
+   b. If `$CEO_TELEGRAM_ID` is set, message the CEO on Telegram **conversationally** — explain the blocker in plain language, share your own take on the right call, and ask for the CEO's input. Include the issue link.
 
-   Then remove `status:in-development`, add `status:awaiting-human`
+      Example tone: *"Hey — dev is stuck on the auth flow for #12. They need to know if we're doing OAuth or email/password first. I'd lean OAuth since it's what we specced, but wanted your call since it affects the timeline. What do you think? https://github.com/org/repo/issues/12"*
+
+   c. Remove `status:in-development`, add `status:awaiting-human`
 
 ---
 
@@ -166,13 +196,14 @@ for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
 done
 ```
 
-For each issue, sort comments by `createdAt`. Find Sparky's escalation comment (contains `"Dev agent is blocked"`). Then check if any comment from a key human appears after it:
+For each issue, sort comments by `createdAt`. Find Sparky's escalation comment (contains `"Dev is blocked"` or `"escalated to Telegram"`). Then check if any comment from a key human **or** a comment containing `"replied via Telegram"` from the agent's own handle appears after it:
 ```bash
 gh issue view ISSUE_NUM --repo REPO --json comments \
   --jq '[.comments[] | select(
     .author.login == "$CEO_HANDLE" or
     .author.login == "$CTO_HANDLE" or
-    .author.login == "$EM_HANDLE"
+    .author.login == "$EM_HANDLE" or
+    (.body | test("replied via Telegram"))
   )] | sort_by(.createdAt) | last'
 ```
 
@@ -182,6 +213,9 @@ If such a comment exists and is timestamped after the escalation comment → act
 1. Remove `status:awaiting-human`, add `status:in-development`
 2. Post on the issue:
    > `@DEV_AGENT_HANDLE — CEO has replied on #ISSUE_NUM. Resuming development.`
+3. If `$CEO_TELEGRAM_ID` is set, send a quick Telegram confirmation:
+
+   Example tone: *"Got it, #12 is unblocked. Dev is back on it."*
 
 ---
 
@@ -309,7 +343,40 @@ Filter to items where Status = "Backlog" or "Todo". Pick the highest priority st
 
 If a story clearly requires both frontend and backend work, create paired issues regardless of which board it was on.
 
-**Action:**
+**Action (when `$CEO_TELEGRAM_ID` is set):**
+
+1. Review the full backlog across both boards
+2. Check what was recently completed (`status:done` issues) for context
+3. Consider project goals from memory
+4. Form an opinion on what to prioritize next and why
+5. Message the CEO on Telegram with a recommendation:
+   - Quick summary of what just shipped
+   - What's in the backlog
+   - Your recommendation and reasoning
+   - A specific question to drive the decision forward
+
+   Example tone: *"We just wrapped up the payment integration. Looking at the backlog, I see the dashboard analytics and the notification system. I'd suggest dashboard next — it's the most requested feature and it's frontend-only so we can ship fast. The notification system has more unknowns. Thoughts? Anything else on your mind?"*
+
+6. **Do NOT create issues yet** — wait for CEO alignment via Telegram
+7. Post a GitHub comment on the relevant project board or a tracking issue to mark that outreach was sent, so the next cron cycle doesn't repeat it:
+   ```bash
+   # Create a brief tracking comment/issue so cron doesn't re-trigger STATE 5
+   gh issue create --repo $FRONTEND_REPO \
+     --title "Priority alignment in progress" \
+     --body "Awaiting CEO input on next priorities via Telegram." \
+     --label "status:awaiting-human"
+   ```
+8. Once the CEO replies on Telegram and aligns, the agent (in the Telegram conversation session) creates the issues using the standard process below.
+
+**Action (when `$CEO_TELEGRAM_ID` is not set — GitHub-only fallback):**
+
+Same as Telegram flow, but tag the CEO in a GitHub issue comment instead:
+> `@CEO_HANDLE — Pipeline is clear. Here's what I'd recommend next: [recommendation with reasoning]. What do you think?`
+
+Then label `status:awaiting-human` and wait.
+
+**Issue creation process (after CEO alignment):**
+
 1. Read the story title and body
 2. Determine final scope from content (override board-implied scope if clearly cross-cutting)
 
@@ -355,10 +422,33 @@ If a story clearly requires both frontend and backend work, create paired issues
 **Condition:** No active issues in either repo AND both project boards have no Backlog/Todo stories.
 
 **Action:**
-Tag the CEO in a GitHub issue comment or create a brief status issue:
-> `@CEO_HANDLE — Both project boards are empty and there are no active issues in flight. Please add new stories to continue.`
 
-Do not repeat this on the next run if nothing has changed.
+The PM reaches out proactively as a thought partner, not a notification bot.
+
+1. Gather context: check recently completed issues (`status:done`) to summarize what the team has shipped
+2. Note that the pipeline is clear
+3. Share any observations or ideas if relevant (from memory, past conversations, product roadmap)
+
+**When `$CEO_TELEGRAM_ID` is set:**
+
+Message the CEO on Telegram conversationally:
+
+Example tone: *"Pipeline is clear — we shipped the auth system and payment flow this sprint. Boards are empty. Do you have new priorities in mind, or should I draft some stories based on the product roadmap we discussed?"*
+
+Then create a tracking issue so the next cron cycle doesn't repeat this:
+```bash
+gh issue create --repo $FRONTEND_REPO \
+  --title "Awaiting new priorities" \
+  --body "Pipeline clear. Reached out to CEO on Telegram for next priorities." \
+  --label "status:awaiting-human"
+```
+
+**When `$CEO_TELEGRAM_ID` is not set (GitHub-only fallback):**
+
+Create a status issue tagging the CEO:
+> `@CEO_HANDLE — Pipeline is clear. We shipped [summary of recent completions]. Boards are empty. What are the next priorities? Happy to draft stories if you have a direction in mind.`
+
+Label `status:awaiting-human`. Do not repeat on the next run if nothing has changed.
 
 ---
 
@@ -379,6 +469,22 @@ Acceptance criteria must be specific, testable, and complete enough that the dev
 
 ---
 
+## Telegram Reply Routing
+
+When the agent is invoked via Telegram (not cron) and the user's message is a decision or reply about a GitHub issue:
+
+1. **Post the CEO's response as a GitHub comment** for the record:
+   > `@CEO_HANDLE replied via Telegram: [message]`
+2. **Take any immediate action** based on what was agreed:
+   - Create issues if priorities were aligned on (use the issue creation process from STATE 5)
+   - Unblock issues if a decision was made (remove `status:awaiting-human`, add `status:in-development`)
+   - Update labels, close tracking issues, etc.
+3. **Respond on Telegram** confirming what actions were taken
+
+This keeps GitHub in sync and ensures the cron state machine picks up changes on the next cycle.
+
+---
+
 ## General Rules
 
 - **One action per cron run.** Evaluate states top-to-bottom, execute the first match, stop.
@@ -386,4 +492,4 @@ Acceptance criteria must be specific, testable, and complete enough that the dev
 - **Never create vague issues.** If a backlog story is too vague to write acceptance criteria for, tag the CEO for clarification before creating the issue.
 - **Always link paired issues.** `scope:both` issues must reference each other in "Related Issues".
 - **Don't double-ping.** Check before acting on STATE 1 and STATE 4.
-- **GitHub is the only shared state.** All coordination happens through issue labels and comments.
+- **GitHub is the source of truth for dev coordination. Telegram is the primary channel for CEO alignment.** Always sync decisions back to GitHub via comments so the state machine and dev agent stay informed.
