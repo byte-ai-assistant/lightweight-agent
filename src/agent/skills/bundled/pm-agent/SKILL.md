@@ -39,9 +39,12 @@ Extract from loaded memory before running any commands:
 | `$DEV_AGENT_HANDLE` | `people.qmd` → dev agent GitHub handle |
 | `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent handle (optional) |
 | `$TELEGRAM_CHAT_ID` | `people.qmd` → Telegram group chat ID for stakeholder alignment (optional) |
+| `$CEO_TELEGRAM` | `people.qmd` → CEO Telegram username, e.g. `farriaga` (optional) |
+| `$CTO_TELEGRAM` | `people.qmd` → CTO Telegram username (optional) |
+| `$EM_TELEGRAM` | `people.qmd` → EM Telegram username (optional) |
 
 If any required variable is missing, stop and report which fields need to be set.
-`$REVIEW_AGENT_HANDLE` and `$TELEGRAM_CHAT_ID` are optional.
+`$REVIEW_AGENT_HANDLE`, `$TELEGRAM_CHAT_ID`, and the `$*_TELEGRAM` handle variables are optional.
 
 ---
 
@@ -304,9 +307,9 @@ Filter for dev agent comments containing "blocked" or "unclear". Check if PM alr
 
 ### STATE 2 — Human replied to blocked issue
 
-**Condition:** Open issue with `status:awaiting-human` has a comment from `$CEO_HANDLE`, `$CTO_HANDLE`, `$EM_HANDLE`, or a PM comment containing "replied via Telegram" — posted *after* the PM's escalation comment.
+**Condition:** Open issue with `status:awaiting-human` has a reply from a human stakeholder — via GitHub OR Telegram group.
 
-**Detection:**
+**Detection — Channel A (GitHub):**
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
@@ -325,10 +328,33 @@ gh issue view ISSUE_NUM --repo REPO --json comments \
   )] | sort_by(.createdAt) | last'
 ```
 
-**Action:**
-1. Remove `status:awaiting-human`, add `status:in-development`
-2. Post: `@$DEV_AGENT_HANDLE — Unblocked. [Summary of decision]. Resume development.`
-3. If `$TELEGRAM_CHAT_ID` set: send brief confirmation to the group. Example: *"Got it, #12 is unblocked. Dev is back on it."*
+**Detection — Channel B (Telegram group, cron context):**
+
+If no GitHub reply found AND `$TELEGRAM_CHAT_ID` is set, poll for recent group messages:
+```bash
+curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=100"
+```
+Filter results for messages where:
+- `message.chat.id` matches `$TELEGRAM_CHAT_ID`
+- `message.from.username` matches any of: `$CEO_TELEGRAM`, `$CTO_TELEGRAM`, `$EM_TELEGRAM`
+- `message.date` (Unix timestamp) is after the `status:awaiting-human` issue's `created_at`
+
+If a matching Telegram message is found, mirror it to GitHub before acting:
+```bash
+gh issue comment ISSUE_NUM --repo REPO \
+  --body "[Relayed from Telegram — @TELEGRAM_USERNAME]: MESSAGE_TEXT"
+```
+
+**Detection — Channel B (Telegram session context):**
+
+If this skill was invoked from a Telegram message (not cron) and there is an open `status:awaiting-human` issue: check whether the current incoming message is providing direction or a decision on that issue. If it clearly is, treat it as a Channel B match — mirror the message to GitHub as a relay comment, then proceed.
+
+---
+
+**Action (once any channel matches):**
+1. Remove `status:awaiting-human`, add appropriate next status (`status:in-development` for tasks/stories, or proceed with epic/sprint creation if the reply is an alignment response).
+2. Post on the GitHub issue: `@$DEV_AGENT_HANDLE — Unblocked. [Summary of decision]. Resume development.` (omit if the reply was about epic/sprint direction rather than a dev blocker).
+3. If `$TELEGRAM_CHAT_ID` set: confirm in the group. Example: *"Got it, #12 is unblocked. Dev is back on it."*
 
 ---
 
@@ -551,16 +577,23 @@ If total == 0 and no `status:awaiting-human` label → act.
 
 **Action:**
 1. Check recently closed issues for a shipping summary.
-2. Message the group chat conversationally (Telegram preferred):
-
-   Example: *"Pipeline is clear — we shipped [summary]. Boards are empty. Want to define the next epic, or should I draft proposals based on the product roadmap?"*
-
-3. Create tracking issue so this state doesn't repeat:
+2. Create the tracking issue **first** — capture the URL before messaging anyone:
    ```bash
-   gh issue create --repo $FRONTEND_REPO \
+   ISSUE_URL=$(gh issue create --repo $FRONTEND_REPO \
      --title "Awaiting new priorities" \
-     --body "Pipeline clear. Reached out to CEO for next direction." \
-     --label "type:spike,scope:both,status:awaiting-human"
+     --body "Pipeline clear. Reached out to team for next direction." \
+     --label "type:spike,scope:both,status:awaiting-human" \
+     --json url --jq '.url')
+   ```
+3. Message the group chat conversationally (Telegram preferred), **including the issue URL** and an explicit instruction to reply there or in the group:
+
+   Example: *"Pipeline is clear — we shipped [summary]. Boards are empty. Want to define the next epic, or should I draft proposals based on the product roadmap? Reply here in the group or directly on the tracking issue: [ISSUE_URL] — I'll pick up replies from both."*
+
+   Telegram command:
+   ```bash
+   curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+     -H "Content-Type: application/json" \
+     -d "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"MESSAGE WITH $ISSUE_URL\", \"parse_mode\": \"Markdown\"}"
    ```
 
 ---
