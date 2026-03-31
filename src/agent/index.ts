@@ -511,6 +511,15 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
             },
           }
         : {}),
+      ...(process.env.VERCEL_TOKEN
+        ? {
+            vercel: {
+              type: "http" as const,
+              url: "https://mcp.vercel.com",
+              headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+            },
+          }
+        : {}),
     },
     maxTurns: 100,
     stderr: (data: string) => process.stderr.write(`[agent] ${data}\n`),
