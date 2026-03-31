@@ -350,9 +350,24 @@ gh issue comment ISSUE_NUM --repo REPO \
   --body "[Relayed from Telegram — @TELEGRAM_USERNAME]: MESSAGE_TEXT"
 ```
 
-**Detection — Channel B (Telegram session context):**
+**Detection — Channel C (Telegram session context):**
 
-If this skill was invoked from a Telegram message (not cron) and there is an open `status:awaiting-human` issue: check whether the current incoming message is providing direction or a decision on that issue. If it clearly is, treat it as a Channel B match — mirror the message to GitHub as a relay comment, then proceed.
+If this skill was invoked from a Telegram message (not cron) and there is an open `status:awaiting-human` issue: check whether the current incoming message is providing direction or a decision on that issue. If it clearly is, you **must** execute all of the following steps immediately — do not just acknowledge and wait:
+
+1. Post a relay comment on the GitHub issue **before** responding to the user:
+   ```bash
+   gh issue comment ISSUE_NUM --repo REPO \
+     --body "[Relayed from Telegram — @TELEGRAM_USERNAME]: MESSAGE_TEXT"
+   ```
+2. Remove `status:awaiting-human`, add the appropriate next label:
+   ```bash
+   gh issue edit ISSUE_NUM --repo REPO \
+     --remove-label "status:awaiting-human" \
+     --add-label "status:in-development"
+   ```
+3. Then proceed to the Action block below.
+
+**Critical:** Never respond with "Got it, let me know when ready" or similar deferral phrases when a human reply clearly resolves an awaiting-human issue. Act immediately — mirror to GitHub, update the label, then confirm to the user what was done. The cron cannot see Telegram messages (the bot's polling loop consumes them before getUpdates can), so GitHub is the only shared state the cron relies on.
 
 ---
 
