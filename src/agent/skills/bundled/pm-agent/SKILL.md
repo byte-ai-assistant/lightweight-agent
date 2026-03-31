@@ -3,7 +3,7 @@ name: pm-agent
 description: >
   Agentic Scrum PM that runs a priority-ordered state machine over GitHub issues each cron cycle.
   Manages the full Epic → Story → Task hierarchy, sprint milestones, sprint planning, sprint review,
-  blocker resolution, PR merges, and CEO alignment. One action per run.
+  blocker resolution, and CEO alignment. One action per run.
 user-invocable: true
 metadata:
   openclaw:
@@ -125,7 +125,7 @@ done
 - `status:in-review` — review in progress
 - `status:changes-requested` — reviewer requested changes
 - `status:awaiting-human` ✏️ — blocked on human input
-- `status:done` ✏️ — merged to dev, complete
+- `status:done` — set by QA agent after merge; read-only for you
 
 ---
 
@@ -363,35 +363,7 @@ If this skill was invoked from a Telegram message (not cron) and there is an ope
 
 ---
 
-### STATE 3 — PR approved, ready to merge
-
-**Condition:** Open issue with `status:ready-for-review` or `status:in-review` has a linked PR with an approved review.
-
-**Detection:**
-```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "status:ready-for-review,status:in-review" --state open \
-    --json number,title,url
-done
-```
-For each issue, find linked PR (body mentions `Closes #N` or `#N`). Check for approval:
-```bash
-gh pr view $PR_NUM --repo $REPO \
-  --json reviews --jq '.reviews[] | select(.state == "APPROVED")'
-```
-
-**Action:**
-1. Merge PR to `dev`:
-   ```bash
-   gh pr merge $PR_NUM --repo $REPO --merge --base dev
-   ```
-2. Remove review labels, add `status:done`. Post: `Merged to dev. ✓`
-3. Check if all sibling tasks under the parent story are `status:done`. If yes → mark story `status:done` too.
-
----
-
-### STATE 4 — Dev is stale
+### STATE 3 — Dev is stale
 
 **Condition:** Open `type:task` with `status:in-development`, no activity for >60 minutes, and last PM comment is not already an unanswered status-check ping.
 
@@ -412,7 +384,7 @@ Post: "Status check — @$DEV_AGENT_HANDLE please update on progress or flag blo
 
 ---
 
-### STATE 5 — Story in sprint has no tasks
+### STATE 4 — Story in sprint has no tasks
 
 **Condition:** Open `type:story` with `status:in-sprint` has no sub-issues (tasks not yet created).
 
@@ -461,7 +433,7 @@ If total == 0 → act.
 
 ---
 
-### STATE 6 — Sprint review needed
+### STATE 5 — Sprint review needed
 
 **Condition:** An active sprint milestone exists and its `due_on` date is today or in the past.
 
@@ -500,7 +472,7 @@ Check if `due_on <= today`.
 
 ---
 
-### STATE 7 — Sprint planning needed
+### STATE 6 — Sprint planning needed
 
 **Condition:** No active sprint milestone AND backlog has at least one `type:story` with `status:backlog` AND no open `status:awaiting-human` issue with "planning" in the title.
 
@@ -539,11 +511,11 @@ done
 **Once CEO approves (via Telegram reply routing):**
 1. Create the sprint milestone in **both repos** with agreed dates.
 2. For each approved story: remove `status:backlog`, add `status:in-sprint`, assign to sprint milestone.
-3. Next cron cycle hits STATE 5 and decomposes stories into tasks automatically.
+3. Next cron cycle hits STATE 4 and decomposes stories into tasks automatically.
 
 ---
 
-### STATE 8 — Epic needs stories
+### STATE 7 — Epic needs stories
 
 **Condition:** Open `type:epic` issue exists with zero sub-issues, and no `status:awaiting-human` already on it.
 
@@ -603,7 +575,7 @@ If total == 0 and no `status:awaiting-human` label → act.
 
 ---
 
-### STATE 9 — Nothing to do *(lowest priority)*
+### STATE 8 — Nothing to do *(lowest priority)*
 
 **Condition:** No active sprint, no backlog stories, no epics without stories, no open sprint planning issue.
 
@@ -717,9 +689,9 @@ gh api repos/$EPIC_REPO/issues/$EPIC_NUM/sub_issues \
 ## General Rules
 
 - **One action per cron run.** First match wins. Stop after acting.
-- **Never merge to `main`.** Only merge to `dev`. QA owns `dev` → `main`.
+- **Never merge PRs.** Merging is the QA agent's responsibility. You track status via labels only.
 - **Never create vague issues.** Can't write acceptance criteria? Escalate first.
-- **Don't double-ping.** Check STATE 1 and STATE 4 for existing unanswered PM comments before acting.
+- **Don't double-ping.** Check STATE 1 and STATE 3 for existing unanswered PM comments before acting.
 - **Always wire sub-issues immediately after creation.** Tasks → stories → epics. No orphan issues.
 - **sub_issue_id is always the database ID, never the issue number.** Use `gh api repos/$REPO/issues/$NUM --jq '.id'` to get it.
 - **One PR per story. Tasks never get their own PR.** The story is the unit of deployment. Tasks are internal dev checklist items on the same branch.
