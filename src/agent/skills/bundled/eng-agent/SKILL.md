@@ -44,28 +44,41 @@ create_cron_job("*/10 * * * *", "Eng agent loop", "Run the eng-agent state machi
 
 ---
 
+## Work Unit Model
+
+**Story = the unit of deployment.** One branch, one PR, one merge to `dev`.
+
+**Task = internal checklist item.** Tasks are sub-issues under a story. You work through them on the story branch and close them as you go. Tasks never get their own branch or PR.
+
+**Bug = treated like a story.** One branch, one PR.
+
+You only open PRs for `type:story` and `type:bug`. Never for `type:task`.
+
+---
+
 ## Label System
 
 Every issue carries exactly one label from each of these three categories. You read and set status labels — never type or scope labels.
 
 ### Type (set by PM, read-only for you)
-- `type:feature` — new functionality
-- `type:bug` — something broken
-- `type:refactor` — code improvement, no behavior change
-- `type:docs` — documentation only
+- `type:epic` — large initiative, spans multiple sprints (never assigned to you directly)
+- `type:story` — user-facing feature, one branch + one PR
+- `type:task` — internal checklist item under a story, no separate PR
+- `type:bug` — defect fix, one branch + one PR like a story
+- `type:spike` — time-boxed research (PM-owned, not a dev PR trigger)
 
 ### Scope (set by PM, read-only for you)
 - `scope:frontend` — work only in the frontend repo
 - `scope:backend` — work only in the backend repo
-- `scope:both` — paired issues across both repos
+- `scope:both` — epics only; individual stories are always frontend or backend, never both
 
 ### Status (you own transitions marked ✏️)
 - `status:in-development` — assigned to dev agent, work in progress
 - `status:ready-for-review` ✏️ — PR submitted, awaiting code review
 - `status:in-review` — code review in progress
 - `status:changes-requested` — reviewer requested changes
-- `status:awaiting-human` — blocked on CEO input
-- `status:done` — merged to dev, complete
+- `status:awaiting-human` — blocked on human input
+- `status:done` ✏️ — task complete (close the sub-issue as you finish each task)
 
 ---
 
@@ -73,12 +86,10 @@ Every issue carries exactly one label from each of these three categories. You r
 
 | Issue type | Branch format |
 |---|---|
-| `type:feature` | `feat/issue-N-short-slug` |
-| `type:bug` | `fix/issue-N-short-slug` |
-| `type:refactor` | `refactor/issue-N-short-slug` |
-| `type:docs` | `docs/issue-N-short-slug` |
+| `type:story` | `story/N-short-slug` (e.g. `story/42-button-system`) |
+| `type:bug` | `fix/N-short-slug` (e.g. `fix/87-login-crash`) |
 
-All PRs target the `dev` branch — never `main`.
+All branches are cut from `dev`. All PRs target `dev` — never `main`.
 
 ---
 
@@ -145,9 +156,11 @@ Check when the last review comment was posted vs. when you last pushed a commit.
 
 ---
 
-### STATE 2 — Assigned issue with no open PR
+### STATE 2 — Assigned story with no open PR
 
-**Condition:** An open issue labeled `status:in-development` is assigned to `$MY_HANDLE`, and no open PR exists whose body references `Closes #ISSUE_NUM`.
+**Condition:** An open `type:story` or `type:bug` labeled `status:in-development` is assigned to `$MY_HANDLE`, and no open PR exists whose body references `Closes #STORY_NUM`.
+
+Do **not** act on `type:task` issues here — tasks are checklist items you work through on the story branch, not independent PR triggers.
 
 **How to detect:**
 ```bash
@@ -155,62 +168,72 @@ for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
     --assignee $MY_HANDLE \
     --label "status:in-development" --state open \
-    --json number,title,url,body,labels
+    --json number,title,url,body,labels \
+    --jq '[.[] | select(.labels[].name | test("type:story|type:bug"))]'
 done
 ```
 
-For each issue, check if a PR already exists:
+For each story, check if a PR already exists:
 ```bash
 gh pr list --repo REPO --state open \
   --json number,body \
-  --jq --arg pat "Closes #ISSUE_NUM" '.[] | select(.body | test($pat))'
+  --jq --arg pat "Closes #STORY_NUM" '.[] | select(.body | test($pat))'
 ```
 
 If a PR exists, skip (already in progress). If no PR exists, act.
 
 **Action:**
-1. Read the full issue body **and all comments**:
+1. Read the full story body **and all comments**:
    ```bash
-   gh issue view ISSUE_NUM --repo REPO --json body,comments
+   gh issue view STORY_NUM --repo REPO --json body,comments
    ```
-   Understand the **What**, **Why**, **Acceptance Criteria**, **Notes**, and any PM or CEO clarifications in the thread before writing a single line of code.
-2. If the acceptance criteria are still vague or technically ambiguous after reading the full thread, do **not** start implementing — go to STATE 3 (post a blocker) instead
-3. Create the feature branch using the Branch Naming table above:
+   Understand the **User Story**, **Acceptance Criteria**, **Branch & PR** instructions, and any PM clarifications before writing a single line of code.
+2. Fetch the sub-issues (tasks) — these are your implementation checklist:
+   ```bash
+   gh api repos/REPO/issues/STORY_NUM/sub_issues \
+     --jq '[.[] | {number: .number, title: .title, state: .state}]'
+   ```
+3. If the acceptance criteria are still vague or technically ambiguous, do **not** start — go to STATE 3 (post a blocker) instead.
+4. Create the story branch:
    ```bash
    git checkout dev && git pull origin dev
-   git checkout -b TYPE/issue-ISSUE_NUM-short-slug
+   git checkout -b story/STORY_NUM-short-slug
    ```
-4. Implement the work — respect the tech stack and design principles in your loaded memory
-5. Open the PR against the `dev` branch:
+5. Implement the work. Work through every task in order. As each task is complete, close its sub-issue:
+   ```bash
+   gh issue close TASK_NUM --repo REPO
+   ```
+6. When **all tasks are done**, open one PR against `dev` that closes the story:
    ```bash
    gh pr create --repo REPO \
-     --title "ISSUE TITLE" \
+     --title "STORY TITLE" \
      --body "$(cat <<'EOF'
-   Closes #ISSUE_NUM
+   Closes #STORY_NUM
 
    ## Summary
-   [what was implemented]
+   [what was implemented — 2-3 sentences]
 
    ## Implementation Notes
-   [non-obvious decisions]
+   [non-obvious decisions, trade-offs, anything a reviewer must know]
 
    ## Test Plan
-   - [ ] [verification step]
+   - [ ] [how to verify acceptance criterion 1]
+   - [ ] [how to verify acceptance criterion 2]
    EOF
    )" \
-     --head TYPE/issue-ISSUE_NUM-short-slug \
+     --head story/STORY_NUM-short-slug \
      --base dev \
      --reviewer $REVIEW_AGENT_HANDLE
    ```
-6. Update issue label: remove `status:in-development`, add `status:ready-for-review`
+7. Update story label: remove `status:in-development`, add `status:ready-for-review`.
 
-**If `$REVIEW_AGENT_HANDLE` is not set:** skip the `--reviewer` flag when creating the PR. The PR will wait for a human to review and approve. Do not self-approve.
+**If `$REVIEW_AGENT_HANDLE` is not set:** omit `--reviewer`. The PR will wait for a human reviewer. Do not self-approve.
 
 ---
 
-### STATE 3 — Blocked on assigned issue
+### STATE 3 — Blocked on assigned story
 
-**Condition:** You have an open `status:in-development` issue assigned to you where you cannot proceed without clarification, AND your most recent comment on the issue is **not** already an unresolved blocker (to avoid double-posting).
+**Condition:** You have an open `type:story` or `type:bug` with `status:in-development` assigned to you where you cannot proceed without clarification, AND your most recent comment on the story is **not** already an unresolved blocker (to avoid double-posting).
 
 **How to detect:**
 ```bash
@@ -244,7 +267,7 @@ Do not touch the issue labels. Do not open a PR. Wait for the PM to respond.
 
 ### STATE 4 — Nothing to do (lowest priority)
 
-**Condition:** No open issues assigned to `$MY_HANDLE` with `status:in-development`, and no open PRs authored by you with `status:changes-requested` on their linked issue.
+**Condition:** No open `type:story` or `type:bug` assigned to `$MY_HANDLE` with `status:in-development`, and no open PRs authored by you with `status:changes-requested` on their linked story.
 
 **Action:**
 Log locally: "No actionable work. Waiting for PM assignment." Do **not** post any comment to GitHub. Do not create issues or self-assign work — issue creation and assignment are the PM's responsibility.
@@ -267,10 +290,12 @@ These are extracted from your memory context and must govern every implementatio
 ## General Rules
 
 - **One action per cron run.** Evaluate states top-to-bottom, execute the first match, stop.
+- **Story = one branch, one PR.** Never open a PR for a task — tasks are checklist items on the story branch.
+- **Branch naming:** `story/N-slug` for stories, `fix/N-slug` for bugs.
+- **`Closes #STORY_NUM` is required in every PR body.** The PM agent detects your PRs by scanning for this. Use the story number, not a task number.
 - **Never merge PRs.** Merging is the PM's responsibility (Sparky STATE 3).
 - **Never create or self-assign issues.** Issue creation and assignment are the PM's responsibility.
 - **Never push to `main` or `dev` directly.** All work goes through feature branches and PRs.
-- **`Closes #N` is required in every PR body.** The PM agent cannot find your PRs without it.
 - **Use "blocked" or "unclear" exactly** when signaling a blocker — these are the keywords the PM scans for.
 - **Don't double-post blockers.** Check before acting on STATE 3.
 - **GitHub is the only shared state.** All coordination happens through issue labels and comments.
