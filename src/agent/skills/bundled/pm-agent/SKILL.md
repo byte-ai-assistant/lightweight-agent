@@ -428,7 +428,6 @@ If total == 0 → act.
      --body "TASK BODY (using task template)" \
      --label "type:task,scope:SCOPE,status:in-development" \
      --milestone "Sprint N — ..." \
-     --assignee "$DEV_AGENT_HANDLE" \
      --json number --jq '.number')
 
    TASK_DB_ID=$(gh api repos/$REPO/issues/$TASK_NUM --jq '.id')
@@ -436,13 +435,29 @@ If total == 0 → act.
    gh api repos/$REPO/issues/$STORY_NUM/sub_issues \
      --method POST --field sub_issue_id=$TASK_DB_ID
    ```
-5. Remove `status:in-sprint` from story, add `status:in-development`.
+4. Update the story body to append a task checklist so the dev can see all tasks in one place:
+   ```bash
+   # Append to existing story body:
+   CURRENT_BODY=$(gh api repos/$REPO/issues/$STORY_NUM --jq '.body')
+   TASK_LIST="## Tasks\n- [ ] #TASK1_NUM — TASK1_TITLE\n- [ ] #TASK2_NUM — TASK2_TITLE\n..."
+   gh api repos/$REPO/issues/$STORY_NUM \
+     --method PATCH \
+     --field body="$CURRENT_BODY\n\n$TASK_LIST"
+   ```
+5. Assign the story to `$DEV_AGENT_HANDLE` and remove `status:in-sprint`, add `status:in-development`:
+   ```bash
+   gh issue edit $STORY_NUM --repo $REPO \
+     --assignee "$DEV_AGENT_HANDLE" \
+     --remove-label "status:in-sprint" \
+     --add-label "status:in-development"
+   ```
 6. Post on story:
    ```
-   Tasks created and linked above. @$DEV_AGENT_HANDLE — please implement this story:
+   Tasks created, linked as sub-issues, and listed above. @$DEV_AGENT_HANDLE — please implement this story:
 
    - Branch: `story/[STORY_NUM]-[short-slug]`
    - Work through all tasks on this single branch. Do not open separate PRs for individual tasks.
+   - Check off each task issue as you complete it.
    - When all tasks are done, open **one PR** against `dev` with `Closes #[STORY_NUM]` in the body.
    ```
 
