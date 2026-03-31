@@ -23,8 +23,8 @@ Before running any commands, extract the following values from your loaded memor
 
 | Variable | Where to find it |
 |---|---|
-| `$FRONTEND_REPO` | `projects.qmd` → frontend repository (e.g. `sparkiq-gh/sparkiq-erp`) |
-| `$BACKEND_REPO` | `projects.qmd` → backend repository (e.g. `sparkiq-gh/erp-api`) |
+| `$FRONTEND_REPO` | `projects.qmd` → frontend repository (e.g. `sparkiq-gh/sparkiq-erp-fe`) |
+| `$BACKEND_REPO` | `projects.qmd` → backend repository (e.g. `sparkiq-gh/sparkiq-erp-be`) |
 | `$ORG` | `projects.qmd` → GitHub org name |
 | `$MY_HANDLE` | `people.qmd` → dev agent GitHub handle (your own handle) |
 | `$PM_AGENT_HANDLE` | `people.qmd` → PM agent GitHub handle (Sparky) |
