@@ -490,12 +490,12 @@ Check if `due_on <= today`.
 
    Example tone: *"Sprint 1 wrapped. We shipped [X] — [N] story points. [Y] stories didn't make it and are back in backlog. Ready to plan Sprint 2 — I'd suggest [recommendation] next."*
 
-7. Create sprint planning tracking issue (meta process issue → FE repo):
+7. Create sprint planning tracking issue in the repo that reflects the primary scope of the sprint (FE-heavy sprint → `$FRONTEND_REPO` with `scope:frontend`; BE-heavy → `$BACKEND_REPO` with `scope:backend`; mixed → either, with `scope:both` on the spike only):
    ```bash
-   gh issue create --repo $FRONTEND_REPO \
+   gh issue create --repo $RELEVANT_REPO \
      --title "Sprint N+1 planning — awaiting CEO alignment" \
      --body "Sprint N complete. Reached out to CEO for next sprint priorities." \
-     --label "type:spike,scope:frontend,status:awaiting-human"
+     --label "type:spike,scope:RELEVANT_SCOPE,status:awaiting-human"
    ```
 
 ---
@@ -528,12 +528,12 @@ done
 
    Example tone: *"Ready to kick off Sprint 2. I'd propose: [story A — 3pts], [story B — 5pts], [story C — 3pts] = 11 pts total. Focused on closing the accounting loop (P0). Does that work, or swap anything in?"*
 
-6. Create tracking issue (meta process issue → FE repo):
+6. Create tracking issue in the repo that reflects the primary scope of the proposed sprint (FE-heavy → `$FRONTEND_REPO` + `scope:frontend`; BE-heavy → `$BACKEND_REPO` + `scope:backend`; mixed → either repo + `scope:both` on the spike only):
    ```bash
-   gh issue create --repo $FRONTEND_REPO \
+   gh issue create --repo $RELEVANT_REPO \
      --title "Sprint N planning — awaiting CEO approval" \
      --body "Sprint proposal sent to CEO. Awaiting approval before creating milestone." \
-     --label "type:spike,scope:frontend,status:awaiting-human"
+     --label "type:spike,scope:RELEVANT_SCOPE,status:awaiting-human"
    ```
 
 **Once CEO approves (via Telegram reply routing):**
@@ -609,14 +609,14 @@ If total == 0 and no `status:awaiting-human` label → act.
 
 **Action:**
 1. Check recently closed issues for a shipping summary.
-2. Create the tracking issue **first** (meta process issue → FE repo). Capture the URL before messaging:
+2. Create the tracking issue **first**. Use `$FRONTEND_REPO` + `scope:frontend` if the pipeline gap is FE-related, `$BACKEND_REPO` + `scope:backend` if BE-related, or `$FRONTEND_REPO` + `scope:both` if general/cross-cutting. Capture the URL before messaging:
    ```bash
-   gh issue create --repo $FRONTEND_REPO \
+   gh issue create --repo $RELEVANT_REPO \
      --title "Awaiting new priorities" \
      --body "Pipeline clear. Reached out to team for next direction." \
-     --label "type:spike,scope:frontend,status:awaiting-human"
+     --label "type:spike,scope:RELEVANT_SCOPE,status:awaiting-human"
    # Then fetch the URL:
-   ISSUE_URL=$(gh issue list --repo $FRONTEND_REPO \
+   ISSUE_URL=$(gh issue list --repo $RELEVANT_REPO \
      --label "status:awaiting-human" --state open \
      --json url --jq '.[0].url')
    ```
@@ -673,7 +673,7 @@ If total == 0 and no `status:awaiting-human` label → act.
 
 **For epics with `scope:both`:** Decompose into separate FE stories (in `$FRONTEND_REPO`, labeled `scope:frontend`) and BE stories (in `$BACKEND_REPO`, labeled `scope:backend`). Link all of them as sub-issues of the epic.
 
-**For process/meta issues** (sprint planning, sprint review, pipeline-clear): create in `$FRONTEND_REPO` with `scope:frontend`. These are PM process issues, not feature work.
+**For process/meta issues** (sprint planning, sprint review, pipeline-clear): create in the repo that matches the primary scope of the work being tracked — `$FRONTEND_REPO` + `scope:frontend` for FE pipeline, `$BACKEND_REPO` + `scope:backend` for BE pipeline, `$FRONTEND_REPO` + `scope:both` for cross-cutting or general alignment. Never default to FE repo just because it's a process issue.
 
 ---
 
