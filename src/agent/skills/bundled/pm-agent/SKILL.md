@@ -64,14 +64,14 @@ Also ensure all labels exist in both repos before first run (see Label System be
 
 ```
 Epic (type:epic)
-  └── Story (type:story)  ← fits in one sprint, has story points
-        └── Task (type:task)  ← technical work item, has hour estimate
+  └── Story (type:story)  ← ONE branch, ONE PR, one sprint
+        └── Task (type:task)  ← internal dev checklist item, NOT a separate PR
 ```
 
 - **Epic** — Large initiative spanning multiple sprints. Never assigned to a sprint milestone directly.
-- **Story** — User-facing feature or requirement. Assigned to a sprint milestone. Estimated in story points (1/2/3/5/8).
-- **Task** — Technical sub-item under a story. Sub-issue on GitHub. Estimated in hours. This is what the dev agent picks up.
-- **Bug** — `type:bug` — story-level defect fix. Assigned directly to a sprint like a story.
+- **Story** — The unit of deployment. One feature branch, one PR, one merge to `dev`. Dev works through all tasks on a single branch and opens one PR that closes the story. Estimated in story points (1/2/3/5/8).
+- **Task** — Internal checklist item under a story. Tracked as a sub-issue so progress is visible, but **never gets its own branch or PR**. The dev checks them off as they work through the story branch.
+- **Bug** — `type:bug` — story-level defect fix. One branch, one PR, same as a story.
 - **Spike** — `type:spike` — time-boxed research. Treated like a task.
 
 ---
@@ -113,9 +113,9 @@ done
 - `type:spike` — Time-boxed research
 
 ### Scope labels
-- `scope:frontend` — work only in `$FRONTEND_REPO`
-- `scope:backend` — work only in `$BACKEND_REPO`
-- `scope:both` — paired issues across both repos
+- `scope:frontend` — work lives in `$FRONTEND_REPO` only
+- `scope:backend` — work lives in `$BACKEND_REPO` only
+- `scope:both` — label for **epics only**, signals that the epic has stories in both repos; never use on stories or tasks
 
 ### Status labels (PM owns transitions marked ✏️)
 - `status:backlog` — groomed, not yet in a sprint
@@ -194,6 +194,11 @@ As a **[role]**, I want **[feature]** so that **[benefit]**.
 
 ## Story Points
 **[1 / 2 / 3 / 5 / 8]** — [brief rationale]
+
+## Branch & PR
+- Branch: `story/[number]-[short-slug]` (e.g. `story/42-button-system`)
+- **One PR per story.** Open the PR against `dev` when all tasks are complete. The PR title should match this story title. The PR body must include `Closes #[story-number]`.
+- Tasks are internal checklist items — do not open separate PRs for them.
 
 ## Epic
 [Link to parent epic issue]
@@ -428,23 +433,31 @@ If total == 0 → act.
 **Action (task decomposition):**
 1. Read the story body, acceptance criteria, and parent epic context carefully.
 2. Break down into 2–5 concrete tasks. Each task = one independently implementable unit (≤8h).
-3. For each task:
+3. For each task, create it and immediately wire it as a sub-issue of the story:
    ```bash
-   gh issue create \
+   TASK_NUM=$(gh issue create \
      --repo $REPO \
      --title "TASK TITLE" \
      --body "TASK BODY (using task template)" \
      --label "type:task,scope:SCOPE,status:in-development" \
      --milestone "Sprint N — ..." \
-     --assignee "$DEV_AGENT_HANDLE"
-   ```
-4. Link each task as a sub-issue of the story:
-   ```bash
+     --assignee "$DEV_AGENT_HANDLE" \
+     --json number --jq '.number')
+
+   TASK_DB_ID=$(gh api repos/$REPO/issues/$TASK_NUM --jq '.id')
+
    gh api repos/$REPO/issues/$STORY_NUM/sub_issues \
-     --method POST --field sub_issue_id=$TASK_NUM
+     --method POST --field sub_issue_id=$TASK_DB_ID
    ```
 5. Remove `status:in-sprint` from story, add `status:in-development`.
-6. Post on story: `Tasks created. @$DEV_AGENT_HANDLE — pick up the first task.`
+6. Post on story:
+   ```
+   Tasks created and linked above. @$DEV_AGENT_HANDLE — please implement this story:
+
+   - Branch: `story/[STORY_NUM]-[short-slug]`
+   - Work through all tasks on this single branch. Do not open separate PRs for individual tasks.
+   - When all tasks are done, open **one PR** against `dev` with `Closes #[STORY_NUM]` in the body.
+   ```
 
 ---
 
@@ -477,12 +490,12 @@ Check if `due_on <= today`.
 
    Example tone: *"Sprint 1 wrapped. We shipped [X] — [N] story points. [Y] stories didn't make it and are back in backlog. Ready to plan Sprint 2 — I'd suggest [recommendation] next."*
 
-7. Create sprint planning tracking issue:
+7. Create sprint planning tracking issue (meta process issue → FE repo):
    ```bash
    gh issue create --repo $FRONTEND_REPO \
      --title "Sprint N+1 planning — awaiting CEO alignment" \
      --body "Sprint N complete. Reached out to CEO for next sprint priorities." \
-     --label "type:spike,scope:both,status:awaiting-human"
+     --label "type:spike,scope:frontend,status:awaiting-human"
    ```
 
 ---
@@ -515,12 +528,12 @@ done
 
    Example tone: *"Ready to kick off Sprint 2. I'd propose: [story A — 3pts], [story B — 5pts], [story C — 3pts] = 11 pts total. Focused on closing the accounting loop (P0). Does that work, or swap anything in?"*
 
-6. Create tracking issue:
+6. Create tracking issue (meta process issue → FE repo):
    ```bash
    gh issue create --repo $FRONTEND_REPO \
      --title "Sprint N planning — awaiting CEO approval" \
      --body "Sprint proposal sent to CEO. Awaiting approval before creating milestone." \
-     --label "type:spike,scope:both,status:awaiting-human"
+     --label "type:spike,scope:frontend,status:awaiting-human"
    ```
 
 **Once CEO approves (via Telegram reply routing):**
@@ -554,20 +567,39 @@ If total == 0 and no `status:awaiting-human` label → act.
    - Fit in one sprint (≤8 story points)
    - Have a clear user-facing benefit
    - Have 3+ testable acceptance criteria
-3. Create each story:
+3. **Determine the target repo for each story based on its scope:**
+   - FE stories (UI, components, pages, client logic) → `$FRONTEND_REPO` with `scope:frontend`
+   - BE stories (API, data models, business logic, infra) → `$BACKEND_REPO` with `scope:backend`
+   - If the epic is `scope:both`, split stories across both repos accordingly — FE stories in FE, BE stories in BE. Never create a story with `scope:both`.
+4. Create each story in the correct repo and immediately wire it as a sub-issue of the epic:
    ```bash
-   gh issue create \
-     --repo $REPO \
+   # FE story
+   STORY_NUM=$(gh issue create \
+     --repo $FRONTEND_REPO \
      --title "As a [role], I want [feature]" \
      --body "STORY BODY (using story template)" \
-     --label "type:story,scope:SCOPE,status:backlog"
+     --label "type:story,scope:frontend,status:backlog" \
+     --json number --jq '.number')
+
+   STORY_DB_ID=$(gh api repos/$FRONTEND_REPO/issues/$STORY_NUM --jq '.id')
+
+   gh api repos/$EPIC_REPO/issues/$EPIC_NUM/sub_issues \
+     --method POST --field sub_issue_id=$STORY_DB_ID
+
+   # BE story (same pattern)
+   STORY_NUM=$(gh issue create \
+     --repo $BACKEND_REPO \
+     --title "As a [role], I want [feature]" \
+     --body "STORY BODY (using story template)" \
+     --label "type:story,scope:backend,status:backlog" \
+     --json number --jq '.number')
+
+   STORY_DB_ID=$(gh api repos/$BACKEND_REPO/issues/$STORY_NUM --jq '.id')
+
+   gh api repos/$EPIC_REPO/issues/$EPIC_NUM/sub_issues \
+     --method POST --field sub_issue_id=$STORY_DB_ID
    ```
-4. Link each story as a sub-issue of the epic:
-   ```bash
-   gh api repos/$REPO/issues/$EPIC_NUM/sub_issues \
-     --method POST --field sub_issue_id=$STORY_NUM
-   ```
-5. Post on epic: `[N] stories created and added to backlog.`
+6. Post on epic: `[N] stories created and added to backlog ([X] FE in $FRONTEND_REPO, [Y] BE in $BACKEND_REPO).`
 
 ---
 
@@ -577,13 +609,16 @@ If total == 0 and no `status:awaiting-human` label → act.
 
 **Action:**
 1. Check recently closed issues for a shipping summary.
-2. Create the tracking issue **first** — capture the URL before messaging anyone:
+2. Create the tracking issue **first** (meta process issue → FE repo). Capture the URL before messaging:
    ```bash
-   ISSUE_URL=$(gh issue create --repo $FRONTEND_REPO \
+   gh issue create --repo $FRONTEND_REPO \
      --title "Awaiting new priorities" \
      --body "Pipeline clear. Reached out to team for next direction." \
-     --label "type:spike,scope:both,status:awaiting-human" \
-     --json url --jq '.url')
+     --label "type:spike,scope:frontend,status:awaiting-human"
+   # Then fetch the URL:
+   ISSUE_URL=$(gh issue list --repo $FRONTEND_REPO \
+     --label "status:awaiting-human" --state open \
+     --json url --jq '.[0].url')
    ```
 3. Message the group chat conversationally (Telegram preferred), **including the issue URL** and an explicit instruction to reply there or in the group:
 
@@ -630,11 +665,52 @@ If total == 0 and no `status:awaiting-human` label → act.
 
 ## Scope Rules
 
-- `scope:frontend` → create in `$FRONTEND_REPO` only
-- `scope:backend` → create in `$BACKEND_REPO` only
-- `scope:both` → create paired issues in both repos, linked to each other in Notes
+**Every issue lives in exactly one repo. No exceptions.**
 
-**For `scope:both` stories:** Create a FE story and a BE story. Link them under the same epic as separate sub-issues. Reference each other in the Notes section.
+- `scope:frontend` → issue in `$FRONTEND_REPO` only
+- `scope:backend` → issue in `$BACKEND_REPO` only
+- `scope:both` → **epics only** — signals the epic has child stories in both repos; never label a story or task with `scope:both`
+
+**For epics with `scope:both`:** Decompose into separate FE stories (in `$FRONTEND_REPO`, labeled `scope:frontend`) and BE stories (in `$BACKEND_REPO`, labeled `scope:backend`). Link all of them as sub-issues of the epic.
+
+**For process/meta issues** (sprint planning, sprint review, pipeline-clear): create in `$FRONTEND_REPO` with `scope:frontend`. These are PM process issues, not feature work.
+
+---
+
+## Sub-Issue Wiring Pattern
+
+**Every issue must be linked to its parent via GitHub sub-issues. No orphan issues. Ever.**
+
+Hierarchy:
+```
+Epic → Stories (sub-issues of epic)
+Story → Tasks (sub-issues of story)
+```
+
+`sub_issue_id` requires the GitHub **database ID** (integer), not the issue number. Always capture it on creation:
+
+```bash
+# Create issue and capture both number and database ID
+ISSUE_NUM=$(gh issue create \
+  --repo $REPO \
+  --title "TITLE" \
+  --body "BODY" \
+  --label "..." \
+  --json number --jq '.number')
+
+ISSUE_DB_ID=$(gh api repos/$REPO/issues/$ISSUE_NUM --jq '.id')
+
+# Wire as sub-issue of parent
+gh api repos/$REPO/issues/$PARENT_ISSUE_NUM/sub_issues \
+  --method POST \
+  --field sub_issue_id=$ISSUE_DB_ID
+```
+
+**Cross-repo note:** Stories may live in a different repo than their epic (e.g. FE story under a BE-hosted epic). The sub-issues API requires the parent and child to be in the same org, but they can be in different repos — use the epic's repo in the API path:
+```bash
+gh api repos/$EPIC_REPO/issues/$EPIC_NUM/sub_issues \
+  --method POST --field sub_issue_id=$STORY_DB_ID
+```
 
 ---
 
@@ -644,6 +720,10 @@ If total == 0 and no `status:awaiting-human` label → act.
 - **Never merge to `main`.** Only merge to `dev`. QA owns `dev` → `main`.
 - **Never create vague issues.** Can't write acceptance criteria? Escalate first.
 - **Don't double-ping.** Check STATE 1 and STATE 4 for existing unanswered PM comments before acting.
-- **Always link hierarchy.** Tasks → stories → epics via sub-issues. No orphan issues.
+- **Always wire sub-issues immediately after creation.** Tasks → stories → epics. No orphan issues.
+- **sub_issue_id is always the database ID, never the issue number.** Use `gh api repos/$REPO/issues/$NUM --jq '.id'` to get it.
+- **One PR per story. Tasks never get their own PR.** The story is the unit of deployment. Tasks are internal dev checklist items on the same branch.
+- **Branch naming:** `story/[number]-[short-slug]` for stories, `bug/[number]-[short-slug]` for bugs.
+- **PR must close the story:** PR body must include `Closes #[story-number]`. Never close individual task issues via PR.
 - **GitHub is source of truth for dev. Telegram is for CEO alignment.** Always sync back to GitHub.
 - **Sprint milestone must exist in both repos** before stories can be assigned to it.
