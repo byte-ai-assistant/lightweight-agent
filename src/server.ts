@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import express from "express";
 import next from "next";
-import { startTelegramBot, sendTelegramMessage } from "./telegram/bot.js";
+import { startTelegramBot } from "./telegram/bot.js";
 import { restoreCronJobs, setCronTriggerHandler } from "./agent/tools/cron.js";
 import { runAgent, loadSessions, cleanupStaleSessions } from "./agent/index.js";
 import { verifyGoogleWorkspaceIdentity } from "./agent/tools/google.js";
@@ -180,11 +180,7 @@ async function main() {
   setCronTriggerHandler(async (job) => {
     console.log(`Cron triggered: [${job.id}] ${job.description}`);
     try {
-      const response = await runAgent(`cron:${job.id}`, job.action);
-      // Send cron results to Telegram
-      if (bot) {
-        sendTelegramMessage(bot, `**Scheduled: ${job.description}**\n\n${response}`);
-      }
+      await runAgent(`cron:${job.id}`, job.action);
     } catch (err) {
       console.error(`Cron job ${job.id} failed:`, err);
     }
