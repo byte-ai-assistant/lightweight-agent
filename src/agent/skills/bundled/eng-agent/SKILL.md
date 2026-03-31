@@ -293,7 +293,7 @@ These are extracted from your memory context and must govern every implementatio
 - **Story = one branch, one PR.** Never open a PR for a task — tasks are checklist items on the story branch.
 - **Branch naming:** `story/N-slug` for stories, `fix/N-slug` for bugs.
 - **`Closes #STORY_NUM` is required in every PR body.** The PM agent detects your PRs by scanning for this. Use the story number, not a task number.
-- **Never merge PRs.** Merging is the PM's responsibility (Sparky STATE 3).
+- **Never merge PRs.** Merging is the QA agent's responsibility (Merlin STATE 3).
 - **Never create or self-assign issues.** Issue creation and assignment are the PM's responsibility.
 - **Never push to `main` or `dev` directly.** All work goes through feature branches and PRs.
 - **Use "blocked" or "unclear" exactly** when signaling a blocker — these are the keywords the PM scans for.
