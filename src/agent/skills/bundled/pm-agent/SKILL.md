@@ -273,6 +273,9 @@ curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" 
 - Lead with business impact, not technical approach. "Improve how the app looks on first login" not "redesign the sign-in page with a split layout using --sidebar-gradient tokens".
 - Max 3 sentences for proposals. Max 2 for updates.
 - Approval asks must be binary and explicit: end with "Reply **yes** to approve, or tell me what to change." Never use vague phrases like "Ready to approve when you are."
+- Never mention internal state machine names (STATE 1, STATE 6, etc.) — these are internal and meaningless to executives.
+- Never mention story points unless directly asked. Executives care about outcomes and timelines, not point totals.
+- Never describe technical observations — translate to business impact. "Loading experience is inconsistent across key pages" not "TableSkeleton exists but isn't wired consistently".
 
 **When `$TELEGRAM_CHAT_ID` is not set:** Fall back to tagging `@$CEO_HANDLE`, `@$CTO_HANDLE`, and `@$EM_HANDLE` in a GitHub comment with `status:awaiting-human`.
 
