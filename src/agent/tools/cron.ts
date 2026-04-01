@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { CRON_FILE } from "../../paths.js";
+import { evaluatePreflightGate } from "./preflight.js";
 
 interface CronJob {
   id: string;
@@ -57,6 +58,11 @@ function scheduleCronJob(job: CronJob) {
     }
 
     if (onCronTrigger) {
+      const gate = await evaluatePreflightGate(job.id);
+      if (!gate.shouldRun) {
+        process.stderr.write(`[cron] Skipped [${job.id}] ${job.description}: ${gate.reason}\n`);
+        return;
+      }
       await onCronTrigger(job);
     }
   });

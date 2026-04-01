@@ -10,6 +10,7 @@ export const PROJECTS_DIR  = path.join(PROFILE_DIR, "projects");
 export const RUNTIME_DIR   = path.join(ROOT, "data"); // ephemeral: sessions, sqlite, chat-history
 
 export const CRON_FILE     = path.join(DATA_DIR, "cron-jobs.json");
+export const PREFLIGHT_FILE = path.join(DATA_DIR, "preflight-gates.json");
 export const PROJECTS_FILE = path.join(DATA_DIR, "projects.json");
 export const DB_PATH       = path.join(RUNTIME_DIR, "memory-index.sqlite");
 export const SESSIONS_FILE = path.join(RUNTIME_DIR, "sessions.json");
