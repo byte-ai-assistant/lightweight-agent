@@ -194,17 +194,26 @@ If a PR exists, skip (already in progress). If no PR exists, act.
      --jq '[.[] | {number: .number, title: .title, state: .state}]'
    ```
 3. If the acceptance criteria are still vague or technically ambiguous, do **not** start — go to STATE 3 (post a blocker) instead.
-4. Create the story branch:
+4. Clone the repo into a temporary working directory, verify it is the correct codebase, then create the story branch:
    ```bash
+   WORK_DIR=$(mktemp -d)
+   gh repo clone $REPO $WORK_DIR
+   cd $WORK_DIR
    git checkout dev && git pull origin dev
+   ```
+   **Before writing any code**, verify the repo is correct:
+   - Check `package.json` exists and matches the expected stack (e.g. Next.js for `scope:frontend`, NestJS for `scope:backend`)
+   - If the repo content does not match — **stop immediately and go to STATE 3** (post a blocker). Never search for an alternative repo or improvise. The correct repo is defined in memory; if it looks wrong, that is a human infrastructure problem, not yours to solve.
+   ```bash
    git checkout -b story/STORY_NUM-short-slug
    ```
 5. Implement the work. Work through every task in order. As each task is complete, close its sub-issue:
    ```bash
    gh issue close TASK_NUM --repo REPO
    ```
-6. When **all tasks are done**, open one PR against `dev` that closes the story:
+6. When **all tasks are done**, push the branch and open one PR against `dev` that closes the story:
    ```bash
+   git push origin story/STORY_NUM-short-slug
    gh pr create --repo REPO \
      --title "STORY TITLE" \
      --body "$(cat <<'EOF'
@@ -226,6 +235,10 @@ If a PR exists, skip (already in progress). If no PR exists, act.
      --reviewer $REVIEW_AGENT_HANDLE
    ```
 7. Update story label: remove `status:in-development`, add `status:ready-for-review`.
+8. Clean up the temporary working directory:
+   ```bash
+   cd / && rm -rf $WORK_DIR
+   ```
 
 **If `$REVIEW_AGENT_HANDLE` is not set:** omit `--reviewer`. The PR will wait for a human reviewer. Do not self-approve.
 
