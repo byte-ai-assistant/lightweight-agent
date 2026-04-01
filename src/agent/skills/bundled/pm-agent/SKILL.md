@@ -196,7 +196,7 @@ As a **[role]**, I want **[feature]** so that **[benefit]**.
 **[1 / 2 / 3 / 5 / 8]** — [brief rationale]
 
 ## Branch & PR
-- Branch: `story/[number]-[short-slug]` (e.g. `story/42-button-system`)
+- Branch: `story/[STORY-NUMBER]-[short-slug]` (e.g. `story/42-button-system`) — use the **story's own issue number**, never the epic number
 - **One PR per story.** Open the PR against `dev` when all tasks are complete. The PR title should match this story title. The PR body must include `Closes #[story-number]`.
 - Tasks are internal checklist items — do not open separate PRs for them.
 
@@ -735,7 +735,7 @@ gh api repos/$EPIC_REPO/issues/$EPIC_NUM/sub_issues \
 - **Always wire sub-issues immediately after creation.** Tasks → stories → epics. No orphan issues.
 - **sub_issue_id is always the database ID, never the issue number.** Use `gh api repos/$REPO/issues/$NUM --jq '.id'` to get it.
 - **One PR per story. Tasks never get their own PR.** The story is the unit of deployment. Tasks are internal dev checklist items on the same branch.
-- **Branch naming:** `story/[number]-[short-slug]` for stories, `bug/[number]-[short-slug]` for bugs.
+- **Branch naming:** `story/[STORY-NUMBER]-[short-slug]` for stories, `bug/[BUG-NUMBER]-[short-slug]` for bugs. Always use the issue's **own number** — never the parent epic number.
 - **PR must close the story:** PR body must include `Closes #[story-number]`. Never close individual task issues via PR.
 - **GitHub is source of truth for dev. Telegram is for CEO alignment.** Always sync back to GitHub.
 - **Sprint milestone must exist in both repos** before stories can be assigned to it.
