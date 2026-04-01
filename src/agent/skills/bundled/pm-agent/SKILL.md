@@ -374,7 +374,7 @@ If this skill was invoked from a Telegram message (not cron) and there is an ope
 **Action (once any channel matches):**
 1. Remove `status:awaiting-human`, add appropriate next status (`status:in-development` for tasks/stories, or proceed with epic/sprint creation if the reply is an alignment response).
 2. Post on the GitHub issue: `@$DEV_AGENT_HANDLE — Unblocked. [Summary of decision]. Resume development.` (omit if the reply was about epic/sprint direction rather than a dev blocker).
-3. If `$TELEGRAM_CHAT_ID` set: confirm in the group. Example: *"Got it, #12 is unblocked. Dev is back on it."*
+3. If `$TELEGRAM_CHAT_ID` set AND the downstream action did **not** already send a Telegram message (i.e. the reply was a dev blocker resolution, not a sprint planning / sprint review / pipeline-clear approval): confirm in the group. Example: *"Got it, #12 is unblocked. Dev is back on it."* — If the downstream action already sent a Telegram (e.g. sprint creation, sprint review summary), **do NOT send an additional confirmation here**. One Telegram message per cron run.
 
 ---
 
@@ -729,6 +729,7 @@ gh api repos/$EPIC_REPO/issues/$EPIC_NUM/sub_issues \
 ## General Rules
 
 - **One action per cron run.** First match wins. Stop after acting.
+- **One Telegram message per cron run.** If the downstream action (e.g. the "Once CEO approves" block in STATE 6, or sprint review in STATE 5) already sends a Telegram message, STATE 2's confirmation step must be skipped. The downstream message already serves as confirmation.
 - **Never merge PRs.** Merging is the QA agent's responsibility. You track status via labels only.
 - **Never create vague issues.** Can't write acceptance criteria? Escalate first.
 - **Don't double-ping.** Check STATE 1 and STATE 3 for existing unanswered PM comments before acting.
