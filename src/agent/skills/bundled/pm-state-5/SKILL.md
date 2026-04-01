@@ -4,9 +4,13 @@ description: "PM state machine — STATE 5: Sprint review needed. Close sprint a
 user-invocable: false
 ---
 
-# STATE 5 — Sprint review needed
+# STATE 5 — Sprint review (due date or early completion)
 
-You have already detected an active sprint milestone whose `due_on` date is today or past. Now run the sprint review.
+You have detected one of:
+- **On-time/overdue:** The sprint milestone's `due_on` date is today or past.
+- **Early completion:** The sprint milestone still has time remaining, but all issues are closed (zero open issues).
+
+In both cases, run the sprint review. If the sprint completed early, celebrate it — mention how far ahead of schedule the team finished.
 
 ## Action
 
@@ -25,7 +29,9 @@ You have already detected an active sprint milestone whose `due_on` date is toda
    ```
 6. Communicate to the group chat (Telegram preferred):
 
-   Example tone: *"Sprint 1 wrapped. We shipped [X] — [N] story points. [Y] stories didn't make it and are back in backlog. Ready to plan Sprint 2 — I'd suggest [recommendation] next."*
+   Example tone (on-time): *"Sprint 1 wrapped. We shipped [X] — [N] story points. [Y] stories didn't make it and are back in backlog. Ready to plan Sprint 2 — I'd suggest [recommendation] next."*
+
+   Example tone (early): *"Sprint 1 done — all [N] stories shipped with [X] days to spare. [business outcome summary]. Ready to plan what's next — reply **yes** for a proposal or drop your priorities here."*
 
 7. Create sprint planning tracking issue in the repo that reflects the primary scope of the sprint:
    ```bash

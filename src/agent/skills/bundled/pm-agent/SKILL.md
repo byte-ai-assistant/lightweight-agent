@@ -158,7 +158,23 @@ If total == 0 → act.
 
 ---
 
-### STATE 5 — Sprint review needed
+### STATE 4b — Sprint completed early
+
+**Condition:** An active sprint milestone exists, its `due_on` is still in the future, BUT the milestone has zero open issues across both repos (all work shipped ahead of schedule).
+
+```bash
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh api repos/$REPO/milestones \
+    --jq '[.[] | select(.state == "open")] | sort_by(.due_on) | first | {number, title, due_on, open_issues}'
+done
+```
+Check if `due_on > today` AND `open_issues == 0` in both repos.
+
+**If matched → `load_skill('pm-state-5')`** (same sprint review action — the sub-skill handles both early and on-time completion)
+
+---
+
+### STATE 5 — Sprint review needed (milestone due)
 
 **Condition:** An active sprint milestone exists and its `due_on` date is today or in the past.
 
