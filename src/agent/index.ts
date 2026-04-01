@@ -466,6 +466,13 @@ ${projectInstructions ? `\n## Active Project Instructions\n${projectInstructions
 ## Relevant Memories
 ${memories || "(No relevant memories found. Use memory_search for deeper queries.)"}${chatGistSection}`;
 
+  // Cron jobs are stateless — GitHub is the source of truth, not session history.
+  // Always start a fresh session for cron runs to prevent context bias.
+  if (userId.startsWith("cron:")) {
+    sessions.delete(userId);
+    saveSessions();
+  }
+
   const sessionInfo = sessions.get(userId);
   let sessionId = sessionInfo?.sessionId;
 
