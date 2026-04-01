@@ -268,6 +268,12 @@ curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" 
 
 **Tone:** Conversational, direct, opinionated. Address the group — don't single out one person. Always bring context + a recommendation. Ask specific questions. No bullet-point dumps.
 
+**Executive audience rules (non-negotiable):**
+- No technical jargon: no file names, component names, CSS classes, library names, or implementation details. That level of detail belongs in the GitHub issue, not here.
+- Lead with business impact, not technical approach. "Improve how the app looks on first login" not "redesign the sign-in page with a split layout using --sidebar-gradient tokens".
+- Max 3 sentences for proposals. Max 2 for updates.
+- Approval asks must be binary and explicit: end with "Reply **yes** to approve, or tell me what to change." Never use vague phrases like "Ready to approve when you are."
+
 **When `$TELEGRAM_CHAT_ID` is not set:** Fall back to tagging `@$CEO_HANDLE`, `@$CTO_HANDLE`, and `@$EM_HANDLE` in a GitHub comment with `status:awaiting-human`.
 
 ### Telegram Reply Routing
@@ -529,7 +535,7 @@ done
 4. Propose a sprint: select stories totalling ~20 story points. Prioritize: P0 bugs → P0 stories → P1.
 5. Communicate to the group chat (Telegram preferred):
 
-   Example tone: *"Ready to kick off Sprint 2. I'd propose: [story A — 3pts], [story B — 5pts], [story C — 3pts] = 11 pts total. Focused on closing the accounting loop (P0). Does that work, or swap anything in?"*
+   Example tone: *"Ready for Sprint 2. Proposal: [business outcome A], [business outcome B], [business outcome C] — about 2 weeks of work. Focused on [strategic goal]. Reply **yes** to kick it off, or tell me what to swap."*
 
 6. Create tracking issue in the repo that reflects the primary scope of the proposed sprint (FE-heavy → `$FRONTEND_REPO` + `scope:frontend`; BE-heavy → `$BACKEND_REPO` + `scope:backend`; mixed → either repo + `scope:both` on the spike only):
    ```bash
@@ -634,7 +640,7 @@ If total == 0 and no `status:awaiting-human` label → act.
    ```
 3. Message the group chat conversationally (Telegram preferred), **including the issue URL** and an explicit instruction to reply there or in the group:
 
-   Example: *"Pipeline is clear — we shipped [summary]. Boards are empty. Want to define the next epic, or should I draft proposals based on the product roadmap? Reply here in the group or directly on the tracking issue: [ISSUE_URL] — I'll pick up replies from both."*
+   Example: *"Pipeline is clear — we shipped [business outcome summary]. Boards are empty. Want me to draft next priorities, or do you have something in mind? Reply **yes** for a proposal, or drop your idea here or on [ISSUE_URL]."*
 
    Telegram command:
    ```bash
