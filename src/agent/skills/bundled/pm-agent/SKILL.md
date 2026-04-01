@@ -342,24 +342,7 @@ gh issue view ISSUE_NUM --repo REPO --json comments \
   )] | sort_by(.createdAt) | last'
 ```
 
-**Detection — Channel B (Telegram group, cron context):**
-
-If no GitHub reply found AND `$TELEGRAM_CHAT_ID` is set, poll for recent group messages:
-```bash
-curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=100"
-```
-Filter results for messages where:
-- `message.chat.id` matches `$TELEGRAM_CHAT_ID`
-- `message.from.username` matches any of: `$CEO_TELEGRAM`, `$CTO_TELEGRAM`, `$EM_TELEGRAM`
-- `message.date` (Unix timestamp) is after the `status:awaiting-human` issue's `created_at`
-
-If a matching Telegram message is found, mirror it to GitHub before acting:
-```bash
-gh issue comment ISSUE_NUM --repo REPO \
-  --body "[Relayed from Telegram — @TELEGRAM_USERNAME]: MESSAGE_TEXT"
-```
-
-**Detection — Channel C (Telegram session context):**
+**Detection — Channel B (Telegram session context):**
 
 If this skill was invoked from a Telegram message (not cron) and there is an open `status:awaiting-human` issue: check whether the current incoming message is providing direction or a decision on that issue. If it clearly is, you **must** execute all of the following steps immediately — do not just acknowledge and wait:
 
@@ -549,6 +532,12 @@ done
    ```
 
 **Once CEO approves (via Telegram reply routing):**
+0. **Idempotency check first** — before doing anything, verify the sprint milestone does not already exist:
+   ```bash
+   gh api repos/$FRONTEND_REPO/milestones \
+     --jq '[.[] | select(.state == "open" and (.title | test("Sprint")))] | length'
+   ```
+   If a sprint milestone already exists, **stop immediately** — another session already handled this approval. Do not create a duplicate milestone, do not send a Telegram message.
 1. Create the sprint milestone in **both repos** with agreed dates:
    ```bash
    for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do

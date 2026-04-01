@@ -46,7 +46,7 @@ import { getConfiguredAgentEmail } from "./tools/google.js";
 
 const STATIC_CACHE_TTL = 60_000;
 const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const SESSION_MAX_MESSAGES = 100;
+const SESSION_MAX_MESSAGES = 40;
 
 // --- Filesystem read caching ---
 let cachedBaseContext: { value: string; expiresAt: number } | null = null;
