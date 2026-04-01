@@ -380,14 +380,15 @@ If this skill was invoked from a Telegram message (not cron) and there is an ope
 
 ### STATE 3 — Dev is stale
 
-**Condition:** Open `type:task` with `status:in-development`, no activity for >60 minutes, and last PM comment is not already an unanswered status-check ping.
+**Condition:** Open `type:story` or `type:bug` with `status:in-development`, no activity for >60 minutes, and last PM comment is not already an unanswered status-check ping.
 
 **Detection:**
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
     --label "status:in-development" --state open \
-    --json number,title,url,updatedAt,comments
+    --json number,title,url,updatedAt,comments,labels \
+    --jq '[.[] | select(.labels[].name | test("type:story|type:bug"))]'
 done
 ```
 Check `updatedAt > 60 min ago`. Check last comment is not an unanswered PM ping.
@@ -539,8 +540,17 @@ done
    ```
 
 **Once CEO approves (via Telegram reply routing):**
-1. Create the sprint milestone in **both repos** with agreed dates.
-2. For each approved story: remove `status:backlog`, add `status:in-sprint`, assign to sprint milestone.
+1. Create the sprint milestone in **both repos** with agreed dates:
+   ```bash
+   for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+     gh api repos/$REPO/milestones \
+       --method POST \
+       --field title="Sprint N — Mon D–D, YYYY" \
+       --field due_on="YYYY-MM-DDT23:59:59Z" \
+       --field description="Sprint goal: [one sentence]"
+   done
+   ```
+2. For each approved story: remove `status:backlog`, add `status:in-sprint`, assign to the sprint milestone in the story's own repo.
 3. Next cron cycle hits STATE 4 and decomposes stories into tasks automatically.
 
 ---
@@ -607,7 +617,7 @@ If total == 0 and no `status:awaiting-human` label → act.
 
 ### STATE 8 — Nothing to do *(lowest priority)*
 
-**Condition:** No active sprint, no backlog stories, no epics without stories, no open sprint planning issue.
+**Condition:** No active sprint, no backlog stories, no epics without stories, and **no open `status:awaiting-human` issues** (of any kind — not just planning issues).
 
 **Action:**
 1. Check recently closed issues for a shipping summary.
