@@ -10,8 +10,9 @@ No open epics, no awaiting-human issues, no in-development work. The pipeline is
 
 ## Action
 
-1. Check recently closed epics/issues for a shipping summary.
-2. Create a tracking issue **first**:
+1. Run `load_skill('product-context')` to review the product roadmap phases and module inventory — use this to ground your proposal to the CEO based on what's built vs. planned.
+2. Check recently closed epics/issues for a shipping summary.
+3. Create a tracking issue **first**:
    ```bash
    gh issue create --repo $RELEVANT_REPO \
      --title "Awaiting new priorities" \
@@ -21,7 +22,7 @@ No open epics, no awaiting-human issues, no in-development work. The pipeline is
      --label "status:awaiting-human" --state open \
      --json url --jq '.[0].url')
    ```
-3. Send Telegram message to the group, **including the issue URL**:
+4. Send Telegram message to the group, **including the issue URL**:
 
    Example: *"Pipeline is clear — we shipped [business outcome summary]. What's next? Reply **yes** for a proposal, or drop your idea here or on [ISSUE_URL]."*
 

@@ -11,8 +11,9 @@ You have detected an open issue with `status:in-development` that has an unresol
 ## Action
 
 1. Read the issue body and blocker comment carefully.
-2. If resolvable from existing spec → post a clarifying comment directly.
-3. If requires product judgment:
+2. If the blocker involves a business rule, domain concept, or product decision, run `load_skill('product-context')` to check if the answer is in the product knowledge base before escalating.
+3. If resolvable from existing spec or product context → post a clarifying comment directly.
+4. If requires product judgment:
    - Post GitHub comment: `@$CEO_HANDLE — Dev is blocked on #N. Details below, escalated for your input.`
    - Send Telegram message to the group chat (see below) — explain the blocker, share your take, ask a specific question. Include the issue link.
 
