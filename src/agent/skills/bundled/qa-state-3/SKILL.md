@@ -69,11 +69,13 @@ Notify PM:
 @$PM_AGENT_HANDLE — #ISSUE_NUM merged to dev.
 ```
 
-**Check parent story completion:** If all sibling tasks under the parent story are now `status:done`, also mark the parent story `status:done`:
+**Check parent story completion:** If the merged issue is a task, check if all sibling tasks under the parent story are now `status:done`. If so, also mark the parent story `status:done`:
 ```bash
 gh api repos/$REPO/issues/$ISSUE_NUM --jq '.parent_issue_url'
 # Then check all sibling sub-issues
 ```
+
+**Stop at the story level.** Never close or modify epic-level issues (`type:epic`). Epic lifecycle (closing, notifying stakeholders) is the PM agent's responsibility.
 
 ## If changes needed → request changes
 
