@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import { MEMORY_DIR, DATA_DIR, DB_PATH, RUNTIME_DIR } from "../../paths.js";
+// Legacy: skip base-context.qmd if it still exists in memory/ (should be in context/)
 const BASE_CONTEXT = "base-context.qmd";
 
 export interface SearchResult {

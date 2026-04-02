@@ -3,6 +3,7 @@ import path from "path";
 const ROOT = process.cwd();
 const PROFILE_DIR = path.join(ROOT, "profile");
 
+export const CONTEXT_DIR   = path.join(PROFILE_DIR, "context");
 export const MEMORY_DIR    = path.join(PROFILE_DIR, "memory");
 export const SKILLS_DIR    = path.join(PROFILE_DIR, "skills");
 export const DATA_DIR      = path.join(PROFILE_DIR, "data");

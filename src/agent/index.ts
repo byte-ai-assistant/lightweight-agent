@@ -2,7 +2,7 @@ import { query, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKResultMessage, SDKSystemMessage, Options } from "@anthropic-ai/claude-agent-sdk";
 import fs from "fs";
 import path from "path";
-import { MEMORY_DIR, SKILLS_DIR, SESSIONS_FILE } from "../paths.js";
+import { CONTEXT_DIR, MEMORY_DIR, SKILLS_DIR, SESSIONS_FILE } from "../paths.js";
 
 
 // Memory tools
@@ -86,9 +86,28 @@ function loadBaseContext(): string {
     return cachedBaseContext.value;
   }
 
-  const contextFile = path.join(MEMORY_DIR, "base-context.qmd");
-  if (!fs.existsSync(contextFile)) return "";
-  const value = fs.readFileSync(contextFile, "utf-8");
+  const contextParts: string[] = [];
+
+  // Primary: load all .qmd files from profile/context/
+  if (fs.existsSync(CONTEXT_DIR)) {
+    const files = fs.readdirSync(CONTEXT_DIR)
+      .filter((f) => f.endsWith(".qmd"))
+      .sort();
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(CONTEXT_DIR, file), "utf-8");
+      if (content.trim()) contextParts.push(content);
+    }
+  }
+
+  // Backwards compat: fall back to memory/base-context.qmd if context/ is empty
+  if (contextParts.length === 0) {
+    const legacyFile = path.join(MEMORY_DIR, "base-context.qmd");
+    if (fs.existsSync(legacyFile)) {
+      contextParts.push(fs.readFileSync(legacyFile, "utf-8"));
+    }
+  }
+
+  const value = contextParts.join("\n\n---\n\n");
   cachedBaseContext = { value, expiresAt: Date.now() + STATIC_CACHE_TTL };
   return value;
 }
@@ -457,8 +476,8 @@ You have three tiers of memory:
 
 ${skillIndex || "(No skills available. Skills can be added to bundled, managed, or workspace directories.)"}
 
-## Base Context
-${baseContext || "(No base context configured yet. User can add memory/base-context.qmd)"}
+## Always-Loaded Context
+${baseContext || "(No context configured. Add .qmd files to profile/context/)"}
 
 ## Project Board
 ${projectBoard || "(No active projects. Use project tools to create and manage projects.)"}

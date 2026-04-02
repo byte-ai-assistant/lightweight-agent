@@ -12,7 +12,7 @@ import { verifyGoogleWorkspaceIdentity } from "./agent/tools/google.js";
 import { handleCommand, checkRestartMarker } from "./commands.js";
 import { initMemoryIndex } from "./agent/memory/index.js";
 import { consolidateUnprocessedSessions } from "./agent/consolidation.js";
-import { MEMORY_DIR, HISTORY_DIR } from "./paths.js";
+import { CONTEXT_DIR, MEMORY_DIR, HISTORY_DIR } from "./paths.js";
 import cron from "node-cron";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -150,7 +150,8 @@ async function main() {
 
   // API: Agent identity for the web UI
   server.get("/api/identity", (_req, res) => {
-    const baseFile = path.join(MEMORY_DIR, "base-context.qmd");
+    const contextFile = path.join(CONTEXT_DIR, "base-context.qmd");
+    const baseFile = fs.existsSync(contextFile) ? contextFile : path.join(MEMORY_DIR, "base-context.qmd");
     let agentName = "Lightweight Agent";
     let agentRole = "";
     let expertise = "";
