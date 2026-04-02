@@ -6,7 +6,7 @@ user-invocable: false
 
 # STATE 1 — Dev is blocked
 
-You have already detected an open issue with `status:in-development` that has an unresolved blocker comment from the dev agent. Now act.
+You have detected an open issue with `status:in-development` that has an unresolved blocker comment from the dev agent. Now act.
 
 ## Action
 
@@ -14,10 +14,19 @@ You have already detected an open issue with `status:in-development` that has an
 2. If resolvable from existing spec → post a clarifying comment directly.
 3. If requires product judgment:
    - Post GitHub comment: `@$CEO_HANDLE — Dev is blocked on #N. Details below, escalated for your input.`
-   - If `$TELEGRAM_CHAT_ID` set: message the group chat conversationally — explain the blocker, share your take, ask a specific question. Include the issue link.
+   - Send Telegram message to the group chat (see below) — explain the blocker, share your take, ask a specific question. Include the issue link.
 
      Example tone: *"Hey — dev is stuck on the auth flow for #12. They need to know if we're doing OAuth or email/password first. I'd lean OAuth since it's what we specced, but wanted your call since it affects the timeline. What do you think? https://github.com/org/repo/issues/12"*
    - Remove `status:in-development`, add `status:awaiting-human`
+
+## Sending Telegram Messages
+
+```bash
+curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"MESSAGE\", \"parse_mode\": \"Markdown\"}"
+```
+If `$TELEGRAM_CHAT_ID` is not set, fall back to tagging stakeholders in a GitHub comment.
 
 ## Communication Rules
 

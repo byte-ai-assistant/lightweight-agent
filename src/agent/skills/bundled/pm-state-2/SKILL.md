@@ -4,9 +4,9 @@ description: "PM state machine — STATE 2: Human replied to blocked issue. Unbl
 user-invocable: false
 ---
 
-# STATE 2 — Human replied to blocked issue
+# STATE 2 — Human replied to escalation
 
-You have already detected an open issue with `status:awaiting-human` that has a human reply. Now act.
+You have detected an open issue with `status:awaiting-human` that has a human reply. Now act.
 
 ## Detection Details
 
@@ -23,7 +23,7 @@ gh issue view ISSUE_NUM --repo REPO --json comments \
 ```
 
 ### Channel B — Telegram session context
-If invoked from a Telegram message (not cron) and there is an open `status:awaiting-human` issue: check whether the incoming message provides direction. If it does, act immediately — do not defer:
+If invoked from a Telegram message (not cron) and there is an open `status:awaiting-human` issue: check whether the incoming message provides direction. If it does, act immediately:
 
 1. Post a relay comment on the GitHub issue **first**:
    ```bash
@@ -41,9 +41,18 @@ If invoked from a Telegram message (not cron) and there is an open `status:await
 
 ## Action (once any channel matches)
 
-1. Remove `status:awaiting-human`, add appropriate next status (`status:in-development` for tasks/stories, or proceed with epic/sprint creation if the reply is an alignment response).
-2. Post on the GitHub issue: `@$DEV_AGENT_HANDLE — Unblocked. [Summary of decision]. Resume development.` (omit if the reply was about epic/sprint direction).
-3. If `$TELEGRAM_CHAT_ID` set AND the downstream action did **not** already send a Telegram message: confirm in the group. Example: *"Got it, #12 is unblocked. Dev is back on it."* — If the downstream action already sent a Telegram, **do NOT send an additional confirmation**. One Telegram message per cron run.
+1. Remove `status:awaiting-human`, add appropriate next status (`status:in-development` for dev blockers, or proceed with epic creation if the reply is about new priorities).
+2. Post on the GitHub issue: `@$DEV_AGENT_HANDLE — Unblocked. [Summary of decision]. Resume development.` (omit if the reply was about epic direction rather than a dev blocker).
+3. Confirm in the Telegram group if the downstream action didn't already send a message. One Telegram message per cron run.
+
+## Sending Telegram Messages
+
+```bash
+curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"MESSAGE\", \"parse_mode\": \"Markdown\"}"
+```
+If `$TELEGRAM_CHAT_ID` is not set, fall back to tagging stakeholders in a GitHub comment.
 
 ## Communication Rules
 

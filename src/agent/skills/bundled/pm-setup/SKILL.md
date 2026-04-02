@@ -28,8 +28,6 @@ for REPO in "${REPOS[@]}"; do
   gh label create "scope:backend"  --repo $REPO --color c5def5 --force
   gh label create "scope:both"     --repo $REPO --color c5def5 --force
   # Status
-  gh label create "status:backlog"            --repo $REPO --color ededed --force
-  gh label create "status:in-sprint"          --repo $REPO --color fbca04 --force
   gh label create "status:in-development"     --repo $REPO --color f9d71c --force
   gh label create "status:ready-for-review"   --repo $REPO --color 0e8a16 --force
   gh label create "status:in-review"          --repo $REPO --color 1d76db --force
@@ -46,8 +44,6 @@ done
 **Scope:** `scope:frontend` (FE repo only) · `scope:backend` (BE repo only) · `scope:both` (epics only — signals stories in both repos)
 
 **Status (PM owns transitions marked ✏️):**
-- `status:backlog` — groomed, not in sprint
-- `status:in-sprint` ✏️ — in active sprint, awaiting task decomposition
 - `status:in-development` ✏️ — dev agent actively working
 - `status:ready-for-review` — PR submitted
 - `status:in-review` — review in progress
