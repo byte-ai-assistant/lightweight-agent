@@ -239,6 +239,7 @@ All must be 0.
 ## General Rules
 
 - **One action per cron run.** First match wins. Stop after acting.
+- **If no state matches, report "No-op" and stop.** Never improvise actions outside the defined states. Statuses like `ready-for-review`, `in-review`, and `changes-requested` are handled by other agents — do not escalate, ping, or message about them.
 - **One Telegram message per cron run.** If the downstream action already sends a Telegram, don't send another.
 - **Never merge PRs.** Merging is the QA agent's responsibility.
 - **Never create vague issues.** Can't write acceptance criteria? Escalate first.
