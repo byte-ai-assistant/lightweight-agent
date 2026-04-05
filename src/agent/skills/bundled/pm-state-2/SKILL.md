@@ -55,30 +55,51 @@ The `status:awaiting-human` issue is a dev blocker (has `status:in-development` 
 
 The `status:awaiting-human` issue is a "waiting for priorities" placeholder (e.g., "Awaiting new priorities"). The human reply provides direction on what to build next.
 
-**Critical: Keep the `awaiting-human` issue open until all GitHub state is fully wired.** It acts as a lock — while it exists, the cron preflight skips and no other state fires. Closing it prematurely causes race conditions.
+**Critical: Keep the `awaiting-human` issue open until the epic is created.** It acts as a lock — while it exists, the cron preflight skips and no other state fires. Closing it prematurely causes race conditions.
 
 1. **Clarify scope if needed** — ask up to 2 focused questions. Do NOT create any issues until scope is confirmed. If invoked from Telegram, the user may answer immediately in the same conversation. The `awaiting-human` issue stays open during this back-and-forth.
 
-2. **Once scope is confirmed, create the epic** — every initiative starts as an epic. Use the epic body format from pm-agent (Goal, Scope, Stories ordered, Success Criteria):
+2. **Determine scope** — load `product-context` if needed. Evaluate whether the feature affects backend, frontend, or both:
+   - `scope:both` → create epic in `$BACKEND_REPO` (API contract drives FE)
+   - `scope:backend` → create epic in `$BACKEND_REPO`
+   - `scope:frontend` → create epic in `$FRONTEND_REPO`
+   When ambiguous, default to `scope:both`.
+
+3. **Once scope is confirmed, create the epic** — use the new body format with separate BE and FE requirements. Do NOT list stories — the dev agent decomposes based on codebase analysis:
    ```bash
    EPIC_NUM=$(gh issue create \
      --repo $TARGET_REPO \
      --title "Epic: TITLE" \
-     --body "EPIC BODY" \
-     --label "type:epic,scope:SCOPE" \
+     --body "$(cat <<'EOF'
+   ## Goal
+   [What this achieves for users and the business]
+
+   ## Scope
+   **In scope:** [explicit list]
+   **Out of scope:** [explicit list]
+
+   ## Backend Requirements
+   - [API endpoints, schema changes, business logic needed]
+
+   ## Frontend Requirements
+   - [UI pages/components, user flows, integration points]
+
+   ## Success Criteria
+   - [ ] [Measurable, user-visible outcome]
+   EOF
+   )" \
+     --label "type:epic,scope:SCOPE,status:backlog" \
      --json number --jq '.number')
    ```
 
-3. **Decompose into stories and tasks** — call `load_skill('pm-state-6')` with the new epic number. This creates stories as sub-issues of the epic, tasks as sub-issues of each story, assigns the first story to `$DEV_AGENT_HANDLE` with `status:in-development`, and posts branch instructions.
-
 4. **Add the epic to the project board.**
 
-5. **Now close the `awaiting-human` issue** — only after everything above is complete:
+5. **Now close the `awaiting-human` issue** — only after the epic is created:
    ```bash
    gh issue close $ISSUE_NUM --repo $REPO
    ```
 
-**Critical:** Never create stories or tasks without a parent epic. The hierarchy is always Epic → Story → Task.
+**Critical:** Do NOT decompose the epic into stories or tasks. The dev agent handles decomposition — it has codebase context that you do not. Your job is to define clear requirements in the epic body.
 
 ## Sending Telegram Messages
 

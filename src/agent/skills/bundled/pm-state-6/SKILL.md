@@ -1,6 +1,6 @@
 ---
 name: pm-state-6
-description: "PM state machine — STATE 6: Epic needs decomposition. Create missing stories + tasks idempotently."
+description: "DEPRECATED — Epic decomposition is now the dev agent's responsibility (eng-state-2-plan). This skill is no longer called by the pm-agent dispatcher."
 user-invocable: false
 ---
 

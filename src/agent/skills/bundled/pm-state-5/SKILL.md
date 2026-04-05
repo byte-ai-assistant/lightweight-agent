@@ -1,51 +1,35 @@
 ---
 name: pm-state-5
-description: "PM state machine — STATE 5: Epic completed. Close epic, notify team, ask for next priorities."
+description: "PM state machine — STATE 5: Epic assigned to dev but no implementation plan posted. Nudge dev."
 user-invocable: false
 ---
 
-# STATE 5 — Epic completed
+# STATE 5 — Epic has no implementation plan (recovery)
 
-You have detected an open epic where all sub-issues are completed (100%). Now close it and notify the team.
+You have detected an open `type:epic` with `status:in-development` assigned to the dev agent that has been open for >30 minutes, has zero sub-issues, and no comment from the dev agent containing "## Implementation Plan".
+
+This means the dev agent was assigned an epic but hasn't started planning. Nudge them.
 
 ## Action
 
-1. Gather all stories in the epic and their outcomes:
+1. Check how long the epic has been in `status:in-development`:
    ```bash
-   gh api repos/$REPO/issues/$EPIC_NUM/sub_issues \
-     --jq '.[].number'
-   ```
-   For each story, get title and story points from the body.
-
-2. Close the epic:
-   ```bash
-   gh issue close $EPIC_NUM --repo $REPO \
-     --comment "All stories shipped. [summary of what was delivered]."
+   gh api repos/$REPO/issues/$EPIC_NUM/timeline --jq '
+     [.[] | select(.event == "labeled" and .label.name == "status:in-development")] | last | .created_at'
    ```
 
-3. Send Telegram message to the group celebrating the delivery:
-
-   Example tone: *"[Epic title] is done — [N] stories shipped. [Business outcome summary]. What should we tackle next? Reply with your priorities or say **yes** for a proposal."*
-
-4. If no other open epics exist, create a tracking issue:
+2. Post a nudge comment on the epic:
    ```bash
-   gh issue create --repo $RELEVANT_REPO \
-     --title "Awaiting new priorities" \
-     --body "Epic completed. Reached out to team for next direction." \
-     --label "type:spike,status:awaiting-human"
+   gh issue comment $EPIC_NUM --repo $REPO \
+     --body "@$DEV_AGENT_HANDLE — This epic was assigned [N] minutes ago but has no implementation plan yet. Please:
+   1. Load the repo context skills and review the requirements
+   2. Post your implementation plan as a comment (use the \`## Implementation Plan\` header)
+   3. Or flag a blocker if the requirements are unclear"
    ```
 
-## Sending Telegram Messages
+## Notes
 
-```bash
-curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-  -H "Content-Type: application/json" \
-  -d "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"MESSAGE\", \"parse_mode\": \"Markdown\"}"
-```
-If `$TELEGRAM_CHAT_ID` is not set, fall back to tagging stakeholders in a GitHub comment.
-
-## Communication Rules
-
-- Telegram tone: conversational, direct. Celebrate the win.
-- No technical jargon. Lead with business outcomes.
-- Max 3 sentences. Ask about next priorities.
+- Only nudge once. Check if you already posted a nudge comment before acting.
+- Do NOT decompose the epic yourself. Decomposition is the dev agent's responsibility.
+- Do NOT escalate to humans unless the epic has been stale for >3 hours with no response from the dev agent.
+- If the dev agent posted a "blocked" or "unclear" comment, this state should not have matched — STATE 1 (dev blocked) handles that.

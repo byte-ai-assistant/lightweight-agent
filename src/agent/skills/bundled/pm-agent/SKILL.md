@@ -2,8 +2,8 @@
 name: pm-agent
 description: >
   Agentic Scrum PM that runs a priority-ordered state machine over GitHub issues each cron cycle.
-  Manages the full Epic → Story → Task hierarchy, blocker resolution, and CEO alignment.
-  Epic-driven workflow — no sprints. One action per run.
+  Creates epics with FE+BE requirements, assigns to dev, monitors progress, and manages CEO alignment.
+  Dev-led decomposition — PM defines requirements, dev decomposes and implements. One action per run.
 user-invocable: true
 metadata:
   openclaw:
@@ -16,7 +16,7 @@ metadata:
         - GITHUB_TOKEN
 ---
 
-# PM Agent — Epic-Driven State Machine (Dispatcher)
+# PM Agent — State Machine (Dispatcher)
 
 Each cron run: scan GitHub across both repos, evaluate states top-to-bottom, execute the **first matching state only**, then stop.
 
@@ -50,7 +50,7 @@ If any required variable is missing, stop and report which fields need to be set
 When invoked by a user (not by cron), check if the cron job exists. If not, offer to create it:
 
 ```
-create_cron_job("*/10 * * * *", "PM agent loop", "Run the pm-agent state machine: load skill pm-agent, then scan GitHub and execute the first matching state.")
+create_cron_job("*/5 * * * *", "PM agent loop", "Run the pm-agent state machine: load skill pm-agent, then scan GitHub and execute the first matching state.")
 ```
 
 Also ensure all labels exist in both repos — run `load_skill('pm-setup')` for the label creation script.
@@ -60,38 +60,25 @@ Also ensure all labels exist in both repos — run `load_skill('pm-setup')` for 
 ## Hierarchy Model
 
 ```
-Epic (type:epic)
-  └── Story (type:story)  ← ONE branch, ONE PR
-        └── Task (type:task)  ← internal dev checklist item, NOT a separate PR
+Epic (type:epic)  ← ONE per feature, scope:both/frontend/backend
+  ├── Story (type:story, scope:backend, in BE repo)
+  ├── Story (type:story, scope:frontend, in FE repo)  ← cross-repo sub-issue OK
+  └── ...
+        └── Task (type:task)  ← internal dev checklist, same repo as parent story
 ```
 
-- **Epic** — A business initiative. The unit of planning. Created interactively with the CEO, contains the full plan (goal, scope, ordered story list) in its body. All stories and tasks are created at epic creation time.
-- **Story** — The unit of deployment. One feature branch, one PR, one merge to `dev`. Estimated in story points (1/2/3/5/8). Dev works through tasks sequentially on one branch.
+- **Epic** — A business initiative. The unit of planning. Created by the PM with high-level requirements (Goal, Scope, BE Requirements, FE Requirements, Success Criteria). The PM does NOT decompose into stories — the dev agent handles that.
+- **Story** — The unit of deployment. One feature branch, one PR, one merge to `dev`. Created by the dev agent during epic planning.
 - **Task** — Internal checklist item under a story. Tracked as a sub-issue but **never gets its own branch or PR**.
 - **Bug** — `type:bug` — defect fix. One branch, one PR, same as a story.
 
-### Epic Body Format
+### Epic Placement Rules
 
-The epic body is the source of truth for the plan and story ordering:
-
-```markdown
-## Goal
-[What this epic achieves for users and the business]
-
-## Scope
-**In scope:** [explicit list]
-**Out of scope:** [explicit list]
-
-## Stories (ordered)
-1. Story title — brief description
-2. Story title — brief description
-3. Story title — brief description
-
-## Success Criteria
-- [ ] [Measurable, user-visible outcome]
-```
-
-Stories are assigned to the dev agent in creation order (lowest issue number first).
+| Scope | Epic created in |
+|---|---|
+| `scope:both` | `$BACKEND_REPO` (API contract drives FE) |
+| `scope:backend` | `$BACKEND_REPO` |
+| `scope:frontend` | `$FRONTEND_REPO` |
 
 ---
 
@@ -101,7 +88,7 @@ Evaluate in priority order. Execute the **first match only**, then load the corr
 
 ### STATE 1 — Dev is blocked *(highest priority)*
 
-**Condition:** Open issue with `status:in-development` has an unresolved "blocked" or "unclear" comment from `$DEV_AGENT_HANDLE`, and PM has not already responded after that comment.
+**Condition:** Open issue with `status:in-development` (either `type:epic` or `type:story`) has an unresolved "blocked" or "unclear" comment from `$DEV_AGENT_HANDLE`, and PM has not already responded after that comment.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
@@ -135,19 +122,73 @@ Also check: if invoked from Telegram (not cron) and there is an open `status:awa
 
 ---
 
-### STATE 3 — Dev is stale
+### STATE 3 — Unprocessed request or bug
 
-**Condition:** Open `type:story` or `type:bug` with `status:in-development`, no activity for >60 minutes, and last PM comment is not an unanswered status-check ping.
+**Condition:** An open `type:request` issue exists, OR an open `type:bug` issue with no `status:*` label exists.
+
+```bash
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "type:request" --state open \
+    --json number,title,url
+done
+```
+Also check for bugs without any status label:
+```bash
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "type:bug" --state open \
+    --json number,title,url,labels \
+    --jq '[.[] | select(.labels | map(.name) | all(test("^status:") | not))]'
+done
+```
+
+**If matched → `load_skill('pm-state-2b')`**
+
+---
+
+### STATE 4 — Assign next from backlog
+
+**Condition:** No `type:epic` or `type:bug` with `status:in-development` exists across both repos, AND at least one `type:epic` or `type:bug` with `status:backlog` exists.
+
+```bash
+# Check nothing is in-development
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "status:in-development" --state open \
+    --json number --jq 'length'
+done
+# All must be 0
+
+# Check backlog has items
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "status:backlog" --state open \
+    --json number,title,url,labels
+done
+```
+
+**If matched → `load_skill('pm-state-3-assign')`**
+
+---
+
+### STATE 5 — Dev is stale
+
+**Condition:** Open `type:epic` or `type:story` with `status:in-development`, no activity for >90 minutes, and last PM comment is not an unanswered status-check ping.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
     --label "status:in-development" --state open \
-    --json number,title,url,updatedAt,comments,labels \
-    --jq '[.[] | select(.labels[].name | test("type:story|type:bug"))]'
+    --json number,title,url,updatedAt,comments,labels
 done
 ```
-Check `updatedAt > 60 min ago`. Check last comment is not an unanswered PM ping.
+Check `updatedAt > 90 min ago`. Check last comment is not an unanswered PM ping.
+
+**Additional logic for epics:** If the issue is `type:epic`:
+- If it has a dev comment containing "## Implementation Plan" but no sub-issues yet → dev is mid-decomposition, **skip** (not stale)
+- If it has no plan comment AND no sub-issues after 90 min → genuinely stale, act
+- If it has sub-issues and a story in `status:in-development` → check the story's `updatedAt` instead
 
 **If matched → action is simple, no sub-skill needed:**
 ```
@@ -156,30 +197,9 @@ Post: "Status check — @$DEV_AGENT_HANDLE please update on progress or flag blo
 
 ---
 
-### STATE 4 — Story completed, assign next
+### STATE 6 — Epic fully implemented
 
-**Condition:** An open `type:epic` has at least one story sub-issue with `status:done` AND at least one story sub-issue that is unstarted (not `status:in-development`, `status:ready-for-review`, `status:in-review`, `status:changes-requested`, or `status:done`) AND no story is currently `status:in-development`.
-
-```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:epic" --state open \
-    --json number,title,url
-done
-```
-For each open epic, list sub-issues and check their labels:
-```bash
-gh api repos/$REPO/issues/$EPIC_NUM/sub_issues --jq '.[].number'
-```
-For each sub-issue, check labels. If there are done stories AND unstarted stories AND no story currently in-development → act.
-
-**If matched → `load_skill('pm-state-4')`**
-
----
-
-### STATE 5 — Epic completed
-
-**Condition:** Open `type:epic` with `sub_issues_summary.completed == sub_issues_summary.total` AND total > 0.
+**Condition:** Open `type:epic` where `sub_issues_summary.completed == sub_issues_summary.total` AND `total > 0`.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
@@ -194,40 +214,39 @@ gh api repos/$REPO/issues/$EPIC_NUM --jq '{total: .sub_issues_summary.total, com
 ```
 If `completed == total` AND `total > 0` → act.
 
-**If matched → `load_skill('pm-state-5')`**
+**If matched → `load_skill('pm-state-4')`**
 
 ---
 
-### STATE 6 — Epic needs decomposition *(recovery)*
+### STATE 7 — Epic has no implementation plan *(recovery)*
 
-**Condition:** Open `type:epic` with zero sub-issues, OR with fewer sub-issues than stories listed in the epic body's "Stories (ordered)" section. No `status:awaiting-human` on the epic.
+**Condition:** Open `type:epic` with `status:in-development` assigned to `$DEV_AGENT_HANDLE`, has been open >30 minutes, has zero sub-issues, and no comment from `$DEV_AGENT_HANDLE` containing "## Implementation Plan" or "blocked" or "unclear".
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
-    --label "type:epic" --state open \
-    --json number,title,url,body,labels
+    --label "type:epic,status:in-development" --state open \
+    --assignee "$DEV_AGENT_HANDLE" \
+    --json number,title,url,updatedAt,comments
 done
 ```
-For each epic without `status:awaiting-human`:
-```bash
-gh api repos/$REPO/issues/$EPIC_NUM --jq '.sub_issues_summary.total'
-```
-If total == 0, or if the epic body lists more stories than sub-issues exist → act.
+For each epic: check `sub_issues_summary.total == 0`, no plan comment, no blocker comment, open >30 min.
 
-**If matched → `load_skill('pm-state-6')`**
+**If matched → `load_skill('pm-state-5')`**
 
 ---
 
-### STATE 7 — Nothing to do *(lowest priority)*
+### STATE 8 — Nothing to do *(lowest priority)*
 
-**Condition:** No open `type:epic` issues, no `status:awaiting-human` issues, no `status:in-development` issues.
+**Condition:** No open `type:epic` issues, no `type:request` issues, no `type:bug` issues, no `status:awaiting-human` issues, no `status:in-development` issues, no `status:backlog` issues.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO --label "type:epic" --state open --json number --jq 'length'
+  gh issue list --repo $REPO --label "type:request" --state open --json number --jq 'length'
   gh issue list --repo $REPO --label "status:awaiting-human" --state open --json number --jq 'length'
   gh issue list --repo $REPO --label "status:in-development" --state open --json number --jq 'length'
+  gh issue list --repo $REPO --label "status:backlog" --state open --json number --jq 'length'
 done
 ```
 All must be 0.
@@ -242,15 +261,12 @@ All must be 0.
 - **If no state matches, report "No-op" and stop.** Never improvise actions outside the defined states. Statuses like `ready-for-review`, `in-review`, and `changes-requested` are handled by other agents — do not escalate, ping, or message about them.
 - **One Telegram message per cron run.** If the downstream action already sends a Telegram, don't send another.
 - **Never merge PRs.** Merging is the QA agent's responsibility.
-- **Never create vague issues.** Can't write acceptance criteria? Escalate first.
+- **Never create stories or tasks.** Decomposition is the dev agent's responsibility. You create epics only.
+- **Never create vague epics.** Can't write clear requirements? Escalate first.
 - **Don't double-ping.** Check for existing unanswered PM comments before acting.
-- **Always wire sub-issues immediately after creation.** No orphan issues.
 - **sub_issue_id is always the database ID, never the issue number.** Use `gh api repos/$REPO/issues/$NUM --jq '.id'` to get it.
-- **One PR per story. Tasks never get their own PR.**
-- **Branch naming:** `story/[STORY-NUMBER]-[short-slug]` for stories, `bug/[BUG-NUMBER]-[short-slug]` for bugs.
-- **PR must close the story:** PR body must include `Closes #[story-number]`.
+- **One epic per feature.** Use `scope:both` for features that span FE and BE. Never create separate FE and BE epics for the same feature.
 - **GitHub is source of truth for dev. Telegram is for CEO alignment.**
-- **Stories are assigned one at a time** in creation order (lowest issue number first from the epic's sub-issues).
 
 ## Sending Telegram Messages
 
