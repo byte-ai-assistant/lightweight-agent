@@ -149,10 +149,12 @@ done
 
 ### STATE 4 — Assign next from backlog
 
-**Condition:** No `type:epic` or `type:bug` with `status:in-development` exists across both repos, AND no `status:awaiting-acceptance` exists (acceptance blocks the pipeline), AND at least one `type:epic` or `type:bug` with `status:backlog` exists.
+**Condition:** No `status:in-development` exists across both repos, AND at least one item with `status:backlog` exists, AND one of:
+- **Path A (bugs bypass queue):** A `type:bug` with `status:backlog` exists — assign it regardless of `status:awaiting-acceptance`. Bugs are urgent fixes that should not wait for unrelated acceptance reviews.
+- **Path B (epics wait):** A `type:epic` with `status:backlog` exists AND no `status:awaiting-acceptance` exists (acceptance blocks epic assignment).
 
 ```bash
-# Check nothing is in-development
+# Check nothing is in-development (required for both paths)
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
     --label "status:in-development" --state open \
@@ -160,18 +162,24 @@ for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
 done
 # All must be 0
 
-# Check nothing is awaiting acceptance
+# Path A: Check for backlog bugs (bypass awaiting-acceptance)
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "type:bug,status:backlog" --state open \
+    --json number,title,url,labels
+done
+# If any found → match immediately (skip awaiting-acceptance check)
+
+# Path B: Check for backlog epics (blocked by awaiting-acceptance)
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
     --label "status:awaiting-acceptance" --state open \
     --json number --jq 'length'
 done
-# All must be 0
-
-# Check backlog has items
+# All must be 0, then:
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
-    --label "status:backlog" --state open \
+    --label "type:epic,status:backlog" --state open \
     --json number,title,url,labels
 done
 ```
