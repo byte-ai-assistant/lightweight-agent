@@ -510,7 +510,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
 
   const options: Options = {
     systemPrompt,
-    maxBudgetUsd: 30.00,
+    maxBudgetUsd: 8.00,
     allowedTools: [
       "Bash",
       "Read",
@@ -549,7 +549,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
           }
         : {}),
     },
-    maxTurns: 100,
+    maxTurns: 50,
     stderr: (data: string) => process.stderr.write(`[agent] ${data}\n`),
     ...(sessionId ? { resume: sessionId } : {}),
   };
