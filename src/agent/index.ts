@@ -274,40 +274,42 @@ async function autoRetrieveChatGists(message: string): Promise<string> {
   }
 }
 
-// Create the MCP server with all custom tools
-const toolServer = createSdkMcpServer({
-  name: "agent-tools",
-  tools: [
-    // Memory
-    readMemory, writeMemory, updateMemory, listMemories, deleteMemory, memorySearch,
-    // Google: Gmail
-    listEmails, readEmail, sendEmail, searchEmails,
-    // Google: Calendar
-    calendarList, calendarEvents, calendarGetEvent, calendarCreateEvent, calendarDeleteEvent, calendarSearch,
-    // Google: Drive
-    driveList, driveSearch, driveGetFile, driveDownload, driveUpload, driveMkdir, driveDelete, driveShare,
-    // Google: Docs
-    docsRead, docsCreate, docsWrite, docsInfo, docsExport,
-    // Google: Sheets
-    sheetsRead, sheetsUpdate, sheetsAppend, sheetsMetadata, sheetsCreate,
-    // Google: Tasks
-    googleTasksListLists, googleTasksList, googleTasksAdd, googleTasksDone, googleTasksDelete,
-    // Google: Contacts
-    contactsSearch, contactsList, contactsGet, contactsCreate,
-    // Cron
-    createCronJob, listCronJobs, deleteCronJob, toggleCronJob,
-    // Projects
-    listProjects, getProject, createProject, updateProject, addTask, updateTask, deleteTask, addPart, removePart,
-    // Transcription
-    transcribeAudioTool,
-    // TTS
-    generateSpeechTool,
-    // Skills
-    loadSkillTool,
-    // Chat history
-    searchChatHistoryTool, getRecentChatsTool,
-  ],
-});
+// All custom tools — listed once, instantiated into a fresh MCP server per run
+// to avoid "Already connected to a transport" errors when cron runs overlap.
+const agentTools = [
+  // Memory
+  readMemory, writeMemory, updateMemory, listMemories, deleteMemory, memorySearch,
+  // Google: Gmail
+  listEmails, readEmail, sendEmail, searchEmails,
+  // Google: Calendar
+  calendarList, calendarEvents, calendarGetEvent, calendarCreateEvent, calendarDeleteEvent, calendarSearch,
+  // Google: Drive
+  driveList, driveSearch, driveGetFile, driveDownload, driveUpload, driveMkdir, driveDelete, driveShare,
+  // Google: Docs
+  docsRead, docsCreate, docsWrite, docsInfo, docsExport,
+  // Google: Sheets
+  sheetsRead, sheetsUpdate, sheetsAppend, sheetsMetadata, sheetsCreate,
+  // Google: Tasks
+  googleTasksListLists, googleTasksList, googleTasksAdd, googleTasksDone, googleTasksDelete,
+  // Google: Contacts
+  contactsSearch, contactsList, contactsGet, contactsCreate,
+  // Cron
+  createCronJob, listCronJobs, deleteCronJob, toggleCronJob,
+  // Projects
+  listProjects, getProject, createProject, updateProject, addTask, updateTask, deleteTask, addPart, removePart,
+  // Transcription
+  transcribeAudioTool,
+  // TTS
+  generateSpeechTool,
+  // Skills
+  loadSkillTool,
+  // Chat history
+  searchChatHistoryTool, getRecentChatsTool,
+];
+
+function createToolServer() {
+  return createSdkMcpServer({ name: "agent-tools", tools: agentTools });
+}
 
 // --- Session persistence ---
 const sessions = new Map<string, SessionInfo>();
@@ -523,7 +525,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
     permissionMode: "bypassPermissions",
     allowDangerouslySkipPermissions: true,
     mcpServers: {
-      agent: toolServer,
+      agent: createToolServer(),
       ...(process.env.EXA_API_KEY
         ? { exa: { type: "http" as const, url: `https://mcp.exa.ai/mcp?exaApiKey=${process.env.EXA_API_KEY}` } }
         : {}),

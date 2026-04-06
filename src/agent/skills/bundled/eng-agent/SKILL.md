@@ -101,6 +101,37 @@ For each epic: check comments for existing plan or blocker from `$MY_HANDLE`.
 
 ---
 
+### STATE 2b — Story in-development but PR already exists *(recovery)*
+
+**Condition:** An open `type:story` or `type:bug` labeled `status:in-development` is assigned to `$MY_HANDLE`, AND an open PR exists whose body references `Closes #STORY_NUM`, AND the issue does NOT have `status:changes-requested`.
+
+This state recovers from interrupted runs where the PR was opened but the label transition was never executed (e.g. due to a crash or timeout).
+
+```bash
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --assignee $MY_HANDLE \
+    --label "status:in-development" --state open \
+    --json number,title,url,body,labels \
+    --jq '[.[] | select(.labels[].name | test("type:story|type:bug"))]'
+done
+```
+For each story/bug, check if a PR already exists:
+```bash
+gh pr list --repo REPO --state open \
+  --json number,body \
+  --jq --arg pat "Closes #STORY_NUM" '.[] | select(.body | test($pat))'
+```
+If a PR exists AND the issue still has `status:in-development`, transition the label:
+```bash
+gh issue edit STORY_NUM --repo REPO \
+  --remove-label "status:in-development" \
+  --add-label "status:ready-for-review"
+```
+Then stop — one action per run.
+
+---
+
 ### STATE 3 — Assigned story or bug with no open PR
 
 **Condition:** An open `type:story` or `type:bug` labeled `status:in-development` is assigned to `$MY_HANDLE`, and no open PR exists whose body references `Closes #STORY_NUM`.

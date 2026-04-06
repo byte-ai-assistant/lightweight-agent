@@ -68,7 +68,13 @@ You have an assigned `type:story` or `type:bug` with `status:in-development` and
    ```
    If `$REVIEW_AGENT_HANDLE` is not set, omit `--reviewer`.
 
-7. Update story label: remove `status:in-development`, add `status:ready-for-review`.
+7. Update story label — this is **mandatory**, do not skip:
+   ```bash
+   gh issue edit STORY_NUM --repo REPO \
+     --remove-label "status:in-development" \
+     --add-label "status:ready-for-review"
+   ```
+   The QA agent's preflight gate checks for `status:ready-for-review`. If you skip this step, your PR will never be reviewed.
 
 8. Clean up the temporary working directory:
    ```bash
