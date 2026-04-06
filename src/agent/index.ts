@@ -430,6 +430,7 @@ export async function runAgent(
 
 ## Agent Identity
 - Primary email: ${agentEmail || "(not configured)"}
+- Channel: ${userId.startsWith("telegram:") ? "Telegram" : userId.startsWith("cron:") ? "Cron" : "Web"}
 
 ## Your Capabilities
 - **Memory**: Read/write QMD files for long-term memory. Memories are automatically searched for relevance. Use memory_search for deeper queries.
