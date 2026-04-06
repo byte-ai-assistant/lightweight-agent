@@ -32,6 +32,8 @@ import { generateSpeechTool } from "./tools/tts.js";
 // Memory search
 import { searchMemory } from "./memory/index.js";
 import { memorySearch } from "./tools/memory-search.js";
+// Inter-agent delegation
+import { delegateToAgent } from "./tools/delegate.js";
 // Chat history
 import { appendChatEntry, searchChatHistory } from "./chat-history.js";
 import { searchChatHistoryTool, getRecentChatsTool } from "./tools/chat-history.js";
@@ -305,6 +307,8 @@ const agentTools = [
   loadSkillTool,
   // Chat history
   searchChatHistoryTool, getRecentChatsTool,
+  // Inter-agent delegation
+  delegateToAgent,
 ];
 
 function createToolServer() {
