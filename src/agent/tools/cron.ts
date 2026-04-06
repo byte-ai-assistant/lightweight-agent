@@ -20,6 +20,9 @@ interface CronJob {
 // In-memory active cron tasks
 const activeTasks = new Map<string, cron.ScheduledTask>();
 
+// Track which jobs are currently executing to prevent concurrent runs
+const runningJobs = new Set<string>();
+
 // Callback that gets set by the server to handle cron triggers
 let onCronTrigger: ((job: CronJob) => Promise<void>) | null = null;
 
@@ -58,12 +61,21 @@ function scheduleCronJob(job: CronJob) {
     }
 
     if (onCronTrigger) {
+      if (runningJobs.has(job.id)) {
+        process.stderr.write(`[cron] Skipped [${job.id}] ${job.description}: previous run still in progress\n`);
+        return;
+      }
       const gate = await evaluatePreflightGate(job.id);
       if (!gate.shouldRun) {
         process.stderr.write(`[cron] Skipped [${job.id}] ${job.description}: ${gate.reason}\n`);
         return;
       }
-      await onCronTrigger(job);
+      runningJobs.add(job.id);
+      try {
+        await onCronTrigger(job);
+      } finally {
+        runningJobs.delete(job.id);
+      }
     }
   });
 

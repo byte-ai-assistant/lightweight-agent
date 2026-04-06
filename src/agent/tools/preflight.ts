@@ -44,7 +44,7 @@ function runShellCheck(command: string, expect: string, timeoutMs: number): Prom
         }
 
         if (expect === "non-zero-output") {
-          if (err) { resolve(true); return; } // fail-open
+          if (err) { resolve(false); return; } // fail-closed: errors don't count as work
           const lines = stdout.trim().split("\n").filter((l) => l.trim());
           if (lines.length === 0) { resolve(false); return; }
           // If all lines are numeric, check if any > 0
@@ -58,15 +58,15 @@ function runShellCheck(command: string, expect: string, timeoutMs: number): Prom
         }
 
         if (expect.startsWith("regex:")) {
-          if (err) { resolve(true); return; } // fail-open
+          if (err) { resolve(false); return; } // fail-closed: errors don't count as work
           const pattern = new RegExp(expect.slice(6));
           resolve(pattern.test(stdout));
           return;
         }
 
-        resolve(true); // unknown expect rule → fail-open
+        resolve(false); // unknown expect rule → fail-closed
       } catch {
-        resolve(true); // fail-open on any error
+        resolve(false); // fail-closed on any error
       }
     });
   });

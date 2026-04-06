@@ -32,7 +32,8 @@ for REPO in "${REPOS[@]}"; do
   gh label create "status:ready-for-review"   --repo $REPO --color 0e8a16 --force
   gh label create "status:in-review"          --repo $REPO --color 1d76db --force
   gh label create "status:changes-requested"  --repo $REPO --color e11d48 --force
-  gh label create "status:awaiting-human"     --repo $REPO --color 8b5cf6 --force
+  gh label create "status:awaiting-human"      --repo $REPO --color 8b5cf6 --force
+  gh label create "status:awaiting-acceptance" --repo $REPO --color d4a017 --force
   gh label create "status:done"               --repo $REPO --color 6f42c1 --force
 done
 ```
@@ -49,6 +50,7 @@ done
 - `status:in-review` — review in progress
 - `status:changes-requested` — reviewer requested changes
 - `status:awaiting-human` ✏️ — blocked on human input
+- `status:awaiting-acceptance` ✏️ — dev complete, awaiting stakeholder verification
 - `status:done` — set by QA agent after merge
 
 ---

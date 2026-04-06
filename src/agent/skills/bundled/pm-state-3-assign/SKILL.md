@@ -6,7 +6,7 @@ user-invocable: false
 
 # STATE 3 — Assign next from backlog
 
-Nothing is `status:in-development` and at least one `type:epic` or `type:bug` with `status:backlog` exists. Now decide what to assign next.
+Nothing is `status:in-development`, nothing is `status:awaiting-acceptance`, and at least one `type:epic` or `type:bug` with `status:backlog` exists. Now decide what to assign next.
 
 ## Action
 

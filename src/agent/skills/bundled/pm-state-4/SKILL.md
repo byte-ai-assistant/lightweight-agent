@@ -1,36 +1,64 @@
 ---
 name: pm-state-4
-description: "PM state machine — STATE 4: Epic fully implemented. Close epic, notify team, ask for next priorities."
+description: "PM state machine — STATE 7: Acceptance reply received. Close if approved, or send back to dev if issues reported."
 user-invocable: false
 ---
 
-# STATE 4 — Epic fully implemented
+# STATE 7 — Acceptance reply received
 
-You have detected an open `type:epic` where all story sub-issues are `status:done` (completed == total, total > 0). The dev agent has finished all work and marked the epic complete. Now close it and notify the team.
+You have detected an open issue with `status:awaiting-acceptance` that has a human reply. Now determine the outcome.
 
-## Action
+## Detection Details
 
-1. Gather all stories in the epic and their outcomes:
+### Channel A — GitHub reply
+Check for human reply after the acceptance request comment:
+```bash
+gh issue view ISSUE_NUM --repo REPO --json comments \
+  --jq '[.comments[] | select(
+    .author.login == "$CEO_HANDLE" or
+    .author.login == "$CTO_HANDLE" or
+    .author.login == "$EM_HANDLE"
+  )] | sort_by(.createdAt) | last'
+```
+
+### Channel B — Telegram session context
+If invoked from a Telegram message (not cron) and there is an open `status:awaiting-acceptance` issue: the incoming message is providing acceptance feedback. Act immediately:
+
+1. Post a relay comment on the GitHub issue **first**:
    ```bash
-   gh api repos/$EPIC_REPO/issues/$EPIC_NUM/sub_issues \
-     --jq '.[] | {number: .number, title: .title, repo: (.repository_url | split("/") | .[-2:] | join("/"))}'
+   gh issue comment ISSUE_NUM --repo REPO \
+     --body "[Relayed from Telegram — @TELEGRAM_USERNAME]: MESSAGE_TEXT"
+   ```
+2. Then proceed to the appropriate path below.
+
+## Determine the outcome
+
+Read the human reply and classify it:
+
+### Path A — Approved
+
+The reply is positive: "approved", "looks good", "works", "confirmed", "all good", or similar affirmative language.
+
+1. Remove `status:awaiting-acceptance`:
+   ```bash
+   gh issue edit $ISSUE_NUM --repo $REPO \
+     --remove-label "status:awaiting-acceptance"
    ```
 
-2. Close the epic:
+2. Close the issue:
    ```bash
-   gh issue close $EPIC_NUM --repo $EPIC_REPO \
-     --comment "Epic complete — all stories shipped to dev.
+   gh issue close $ISSUE_NUM --repo $REPO \
+     --comment "Accepted by stakeholder. Closing.
 
    ## Delivered
-   [List each story: number, title, which repo]
+   [List each story/fix: number, title, which repo]
 
    ## Business Outcome
    [What users can now do that they couldn't before]"
    ```
 
-3. Send Telegram message to the group celebrating the delivery:
-
-   Example tone: *"[Epic title] is done — [N] stories shipped across BE and FE. [Business outcome summary]. What should we tackle next? Reply with your priorities or say **yes** for a proposal."*
+3. Send Telegram message celebrating the delivery:
+   *"[Epic/Bug title] verified and closed. [Business outcome summary]. What should we tackle next? Reply with your priorities or say **yes** for a proposal."*
 
 4. Check if there's more work queued:
    ```bash
@@ -51,6 +79,35 @@ You have detected an open `type:epic` where all story sub-issues are `status:don
      --label "type:spike,status:awaiting-human"
    ```
 
+### Path B — Issues reported
+
+The reply describes problems: specific bugs, incorrect behavior, missing functionality, or anything that is not a clear approval.
+
+1. Remove `status:awaiting-acceptance` and restore `status:in-development`:
+   ```bash
+   gh issue edit $ISSUE_NUM --repo $REPO \
+     --remove-label "status:awaiting-acceptance" \
+     --add-label "status:in-development"
+   ```
+
+2. Post the feedback as a structured comment tagging the dev agent:
+   ```bash
+   gh issue comment $ISSUE_NUM --repo $REPO \
+     --body "## Acceptance Feedback — Issues Reported
+
+   @$DEV_AGENT_HANDLE — stakeholder verification found issues. Please address all items below before this can be re-submitted for acceptance.
+
+   ### Reported Issues
+   [Quote or summarize the human's feedback — preserve all specific details, error messages, and reproduction steps]
+
+   Once all issues are resolved and merged, this will be re-submitted for acceptance automatically."
+   ```
+
+3. Send Telegram confirmation:
+   *"Got it — sending [Epic/Bug title] back to dev with your feedback. Will re-request acceptance once fixes are shipped."*
+
+4. **Stop.** Do not close. Do not assign new work. The dev agent will detect the `status:in-development` label on the next cycle and address the feedback. Once all fixes are merged, STATE 6 will fire again requesting acceptance.
+
 ## Sending Telegram Messages
 
 ```bash
@@ -62,6 +119,6 @@ If `$TELEGRAM_CHAT_ID` is not set, fall back to tagging stakeholders in a GitHub
 
 ## Communication Rules
 
-- Telegram tone: conversational, direct. Celebrate the win.
-- No technical jargon. Lead with business outcomes.
-- Max 3 sentences. Ask about next priorities.
+- Telegram tone: conversational, direct.
+- Path A: Celebrate the win. No technical jargon. Lead with business outcomes. Max 3 sentences.
+- Path B: Acknowledge the feedback, confirm it's going back to dev. Reassuring tone — no blame. Max 2 sentences.

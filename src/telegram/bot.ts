@@ -93,6 +93,7 @@ export function startTelegramBot() {
   }
 
   const bot = new TelegramBot(token, { polling: true });
+  const botInfoPromise = bot.getMe(); // cache bot identity for group chat filtering
 
   // Stop polling cleanly on process exit to prevent duplicate updates
   const stopPolling = () => {
@@ -133,6 +134,22 @@ export function startTelegramBot() {
     }).catch(() => {});
 
     let text = msg.text ?? "";
+
+    // In group chats, only respond to messages that @mention this bot or reply to it
+    if (msg.chat.type === "group" || msg.chat.type === "supergroup") {
+      const botInfo = await botInfoPromise;
+      const botUsername = botInfo.username ?? "";
+      const mentionsBot =
+        text.includes(`@${botUsername}`) ||
+        msg.entities?.some(
+          (e) =>
+            e.type === "mention" &&
+            text.substring(e.offset, e.offset + e.length) === `@${botUsername}`
+        );
+      const isReplyToBot = msg.reply_to_message?.from?.id === botInfo.id;
+      if (!mentionsBot && !isReplyToBot) return;
+      text = text.replace(`@${botUsername}`, "").trim();
+    }
 
     // Slash commands — instant response, no queue
     if (text.startsWith("/")) {

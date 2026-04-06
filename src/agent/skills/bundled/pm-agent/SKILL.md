@@ -149,13 +149,21 @@ done
 
 ### STATE 4 — Assign next from backlog
 
-**Condition:** No `type:epic` or `type:bug` with `status:in-development` exists across both repos, AND at least one `type:epic` or `type:bug` with `status:backlog` exists.
+**Condition:** No `type:epic` or `type:bug` with `status:in-development` exists across both repos, AND no `status:awaiting-acceptance` exists (acceptance blocks the pipeline), AND at least one `type:epic` or `type:bug` with `status:backlog` exists.
 
 ```bash
 # Check nothing is in-development
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
     --label "status:in-development" --state open \
+    --json number --jq 'length'
+done
+# All must be 0
+
+# Check nothing is awaiting acceptance
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "status:awaiting-acceptance" --state open \
     --json number --jq 'length'
 done
 # All must be 0
@@ -197,28 +205,58 @@ Post: "Status check — @$DEV_AGENT_HANDLE please update on progress or flag blo
 
 ---
 
-### STATE 6 — Epic fully implemented
+### STATE 6 — Epic/bug completed, request acceptance
 
-**Condition:** Open `type:epic` where `sub_issues_summary.completed == sub_issues_summary.total` AND `total > 0`.
+**Condition A (epic):** Open `type:epic` where `sub_issues_summary.completed == sub_issues_summary.total` AND `total > 0` AND the epic does NOT have `status:awaiting-acceptance`.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO \
     --label "type:epic" --state open \
-    --json number,title,url
+    --json number,title,url,labels
 done
 ```
-For each epic:
+For each epic (skip if it already has `status:awaiting-acceptance`):
 ```bash
 gh api repos/$REPO/issues/$EPIC_NUM --jq '{total: .sub_issues_summary.total, completed: .sub_issues_summary.completed}'
 ```
-If `completed == total` AND `total > 0` → act.
+If `completed == total` AND `total > 0` AND no `status:awaiting-acceptance` label → act.
+
+**Condition B (bug):** Open `type:bug` with `status:done` AND no `status:awaiting-acceptance` label.
+
+```bash
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "type:bug,status:done" --state open \
+    --json number,title,url,labels
+done
+```
+If any match exists AND does not already have `status:awaiting-acceptance` → act.
+
+**If matched → `load_skill('pm-state-6-acceptance')`**
+
+---
+
+### STATE 7 — Acceptance reply received
+
+**Condition:** Open issue with `status:awaiting-acceptance` that has a human reply (from `$CEO_HANDLE`, `$CTO_HANDLE`, or `$EM_HANDLE`) after the acceptance request comment.
+
+```bash
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo $REPO \
+    --label "status:awaiting-acceptance" --state open \
+    --json number,title,url,comments,labels
+done
+```
+For each issue: find the acceptance request comment (contains "Acceptance Review Requested" or "verify the fix"). Check for a human reply after it.
+
+Also check: if invoked from Telegram (not cron) and there is an open `status:awaiting-acceptance` issue, the incoming message may be providing acceptance feedback — act immediately.
 
 **If matched → `load_skill('pm-state-4')`**
 
 ---
 
-### STATE 7 — Epic has no implementation plan *(recovery)*
+### STATE 8 — Epic has no implementation plan *(recovery, was STATE 7)*
 
 **Condition:** Open `type:epic` with `status:in-development` assigned to `$DEV_AGENT_HANDLE`, has been open >30 minutes, has zero sub-issues, and no comment from `$DEV_AGENT_HANDLE` containing "## Implementation Plan" or "blocked" or "unclear".
 
@@ -236,15 +274,16 @@ For each epic: check `sub_issues_summary.total == 0`, no plan comment, no blocke
 
 ---
 
-### STATE 8 — Nothing to do *(lowest priority)*
+### STATE 9 — Nothing to do *(lowest priority, was STATE 8)*
 
-**Condition:** No open `type:epic` issues, no `type:request` issues, no `type:bug` issues, no `status:awaiting-human` issues, no `status:in-development` issues, no `status:backlog` issues.
+**Condition:** No open `type:epic` issues, no `type:request` issues, no `type:bug` issues, no `status:awaiting-human` issues, no `status:awaiting-acceptance` issues, no `status:in-development` issues, no `status:backlog` issues.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
   gh issue list --repo $REPO --label "type:epic" --state open --json number --jq 'length'
   gh issue list --repo $REPO --label "type:request" --state open --json number --jq 'length'
   gh issue list --repo $REPO --label "status:awaiting-human" --state open --json number --jq 'length'
+  gh issue list --repo $REPO --label "status:awaiting-acceptance" --state open --json number --jq 'length'
   gh issue list --repo $REPO --label "status:in-development" --state open --json number --jq 'length'
   gh issue list --repo $REPO --label "status:backlog" --state open --json number --jq 'length'
 done
