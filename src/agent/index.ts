@@ -549,7 +549,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
           }
         : {}),
     },
-    maxTurns: 50,
+    maxTurns: 100,
     stderr: (data: string) => process.stderr.write(`[agent] ${data}\n`),
     ...(sessionId ? { resume: sessionId } : {}),
   };
