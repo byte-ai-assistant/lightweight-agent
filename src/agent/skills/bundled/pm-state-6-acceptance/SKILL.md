@@ -44,6 +44,8 @@ The dev work is complete and QA has merged. Now ask the reporting user to verify
    [List each story with number, title, and repo]
 
    @$CEO_HANDLE — please verify this feature works correctly. Reply with **approved** if everything looks good, or describe any issues you find.
+
+   <!-- pm-auto -->
    EOF
    )"
    ```
@@ -74,7 +76,9 @@ The dev work is complete and QA has merged. Now ask the reporting user to verify
 3. Post a GitHub comment:
    ```bash
    gh issue comment $BUG_NUM --repo $BUG_REPO \
-     --body "Fix merged to dev. @$CEO_HANDLE — please verify the fix works. Reply with **approved** or describe any remaining issues."
+     --body "Fix merged to dev. @$CEO_HANDLE — please verify the fix works. Reply with **approved** or describe any remaining issues.
+
+   <!-- pm-auto -->"
    ```
 
 4. Send Telegram message:
