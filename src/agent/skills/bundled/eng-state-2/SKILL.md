@@ -24,7 +24,9 @@ You have an assigned `type:story` or `type:bug` with `status:in-development` and
 
 3. If the acceptance criteria are vague or technically ambiguous, do **not** start — go to STATE 3 (post a blocker) instead.
 
-4. Clone the repo into a temporary working directory, verify it is correct, then create the story branch:
+4. **Clone the repo IMMEDIATELY** — this is your next step, before any investigation. Do NOT explore code via the GitHub API (`gh api repos/.../contents/...`). Remote API exploration is slow, error-prone (URL quoting), and expensive (each call costs a turn). Clone once, then use Grep/Read/Glob locally.
+
+   Clone into a temporary working directory, verify it is correct, then create the story branch:
    ```bash
    WORK_DIR=$(mktemp -d)
    gh repo clone $REPO $WORK_DIR
@@ -34,11 +36,20 @@ You have an assigned `type:story` or `type:bug` with `status:in-development` and
    **Before writing any code**, verify the repo is correct:
    - Check `package.json` exists and matches the expected stack (Next.js for `scope:frontend`, NestJS for `scope:backend`)
    - If the repo content does not match — **stop and go to STATE 3** (post a blocker). Never search for an alternative repo.
+
+   **For `scope:both` issues:** Clone both repos into sibling directories so you can investigate across the stack locally:
+   ```bash
+   WORK_DIR=$(mktemp -d)
+   gh repo clone $BACKEND_REPO $WORK_DIR/be && cd $WORK_DIR/be && git checkout dev && git pull origin dev && cd ..
+   gh repo clone $FRONTEND_REPO $WORK_DIR/fe && cd $WORK_DIR/fe && git checkout dev && git pull origin dev && cd ..
+   ```
+   Create the fix branch in whichever repo (or both) needs changes.
+
    ```bash
    git checkout -b story/STORY_NUM-short-slug
    ```
 
-5. Implement the work. Work through every task in order. As each task is complete, close its sub-issue:
+5. Implement the work. Work through every task in order. **All investigation happens locally in the cloned repo** — use Grep to find references, Read to understand code, Glob to find files. Do NOT spawn subagents for investigation; they can't see what you've already read and will duplicate work. Do NOT use `gh api` or `gh search code` to read files you already have locally. As each task is complete, close its sub-issue:
    ```bash
    gh issue close TASK_NUM --repo REPO
    ```
