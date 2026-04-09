@@ -2,8 +2,8 @@
 name: pm-agent
 description: >
   Agentic Scrum PM that runs a priority-ordered state machine over GitHub issues each cron cycle.
-  Creates epics with FE+BE requirements, assigns to dev, monitors progress, and manages CEO alignment.
-  Dev-led decomposition — PM defines requirements, dev decomposes and implements. One action per run.
+  Creates epics with full brainstormed requirements, assigns to dev, monitors progress, and manages CEO alignment.
+  Brainstorming happens via Telegram (interactive). Cron handles milestone management only. One action per run.
 user-invocable: true
 metadata:
   openclaw:
@@ -16,9 +16,11 @@ metadata:
         - GITHUB_TOKEN
 ---
 
-# PM Agent — State Machine (Dispatcher)
+# PM Agent v2 — State Machine (Dispatcher)
 
 Each cron run: scan GitHub across both repos, evaluate states top-to-bottom, execute the **first matching state only**, then stop.
+
+**Important:** Brainstorming with the CEO happens via Telegram sessions (interactive, session-persistent), NOT via cron. The cron state machine handles only milestone management — assigning work, unblocking, closing epics, and processing orphaned intake.
 
 ---
 
@@ -28,20 +30,13 @@ Extract from loaded memory before running any commands:
 
 | Variable | Source |
 |---|---|
-| `$FRONTEND_REPO` | `projects.qmd` → FE repo (e.g. `org/repo-fe`) |
-| `$BACKEND_REPO` | `projects.qmd` → BE repo (e.g. `org/repo-be`) |
-| `$ORG` | `projects.qmd` → GitHub org |
-| `$CEO_HANDLE` | `people.qmd` → CEO GitHub handle |
-| `$CTO_HANDLE` | `people.qmd` → CTO GitHub handle |
-| `$EM_HANDLE` | `people.qmd` → Engineering Manager GitHub handle |
-| `$DEV_AGENT_HANDLE` | `people.qmd` → dev agent GitHub handle |
-| `$REVIEW_AGENT_HANDLE` | `people.qmd` → code review agent handle (optional) |
-| `$TELEGRAM_CHAT_ID` | `people.qmd` → Telegram group chat ID (optional) |
-| `$CEO_TELEGRAM` | `people.qmd` → CEO Telegram username (optional) |
-| `$CTO_TELEGRAM` | `people.qmd` → CTO Telegram username (optional) |
-| `$EM_TELEGRAM` | `people.qmd` → EM Telegram username (optional) |
-
-If any required variable is missing, stop and report which fields need to be set.
+| `$FRONTEND_REPO` | `projects.qmd` → `sparkiq-gh/sparkiq-erp-fe` |
+| `$BACKEND_REPO` | `projects.qmd` → `sparkiq-gh/sparkiq-erp-be` |
+| `$ORG` | `projects.qmd` → `sparkiq-gh` |
+| `$DEV_AGENT_HANDLE` | `people.qmd` → Jeff's GitHub handle |
+| `$CEO_HANDLE` | `people.qmd` → CEO's GitHub handle |
+| `$CTO_HANDLE` | `people.qmd` → CTO's GitHub handle |
+| `$TELEGRAM_CHAT_ID` | `people.qmd` → group chat ID |
 
 ---
 
@@ -50,277 +45,121 @@ If any required variable is missing, stop and report which fields need to be set
 When invoked by a user (not by cron), check if the cron job exists. If not, offer to create it:
 
 ```
-create_cron_job("*/5 * * * *", "PM agent loop", "Run the pm-agent state machine: load skill pm-agent, then scan GitHub and execute the first matching state.")
+create_cron_job("*/5 * * * *", "PM agent state machine", "Run the pm-agent state machine: load skill pm-agent, then scan GitHub and execute the first matching state.")
 ```
-
-Also ensure all labels exist in both repos — run `load_skill('pm-setup')` for the label creation script.
 
 ---
 
-## Hierarchy Model
+## Invocation Model
 
-```
-Epic (type:epic)  ← ONE per feature, scope:both/frontend/backend
-  ├── Story (type:story, scope:backend, in BE repo)
-  ├── Story (type:story, scope:frontend, in FE repo)  ← cross-repo sub-issue OK
-  └── ...
-        └── Task (type:task)  ← internal dev checklist, same repo as parent story
-```
+| Path | When | Skills Used |
+|---|---|---|
+| **Telegram** (interactive) | CEO sends a message | `pm-brainstorm` — product brainstorming, publishes epic when done. NO GitHub artifacts until complete. |
+| **Cron** (stateless) | Every 5 minutes | This state machine — milestone management only. |
 
-- **Epic** — A business initiative. The unit of planning. Created by the PM with high-level requirements (Goal, Scope, BE Requirements, FE Requirements, Success Criteria). The PM does NOT decompose into stories — the dev agent handles that.
-- **Story** — The unit of deployment. One feature branch, one PR, one merge to `dev`. Created by the dev agent during epic planning.
-- **Task** — Internal checklist item under a story. Tracked as a sub-issue but **never gets its own branch or PR**.
-- **Bug** — `type:bug` — defect fix. One branch, one PR, same as a story.
-
-### Epic Placement Rules
-
-| Scope | Epic created in |
-|---|---|
-| `scope:both` | `$BACKEND_REPO` (API contract drives FE) |
-| `scope:backend` | `$BACKEND_REPO` |
-| `scope:frontend` | `$FRONTEND_REPO` |
+**The cron state machine NEVER encounters issues that Telegram is actively working on**, because Telegram brainstorming creates zero GitHub artifacts until brainstorming is complete.
 
 ---
 
-## State Machine — Detection
+## State Machine — Detection (Cron Path)
 
 Evaluate in priority order. Execute the **first match only**, then load the corresponding sub-skill.
 
-### STATE 1 — Dev is blocked *(highest priority)*
+### STATE 1 — Orphaned intake *(highest priority)*
 
-**Condition:** Open issue with `status:in-development` (either `type:epic` or `type:story`) has an unresolved "blocked" or "unclear" comment from `$DEV_AGENT_HANDLE`, and PM has not already responded after that comment.
+**Condition:** A `type:request` issue exists with no `status:` label, OR a `type:bug` issue exists with no `status:` label.
+
+These are requests/bugs that were created as fallbacks (CEO dropped a message and left without engaging in brainstorming).
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "status:in-development" --state open \
-    --json number,title,url,comments
+  # Unprocessed requests
+  gh issue list --repo "$REPO" --label "type:request" --state open \
+    --json number,title,labels \
+    --jq '[.[] | select([.labels[].name] | any(startswith("status:")) | not)]'
+  
+  # Unprocessed bugs
+  gh issue list --repo "$REPO" --label "type:bug" --state open \
+    --json number,title,labels \
+    --jq '[.[] | select([.labels[].name] | any(startswith("status:")) | not)]'
 done
 ```
-Filter for dev agent comments containing "blocked" or "unclear". Check if PM already replied — if yes, skip.
 
-**If matched → `load_skill('pm-state-1')`**
+**If matched → `load_skill('pm-process-intake')`**
 
 ---
 
-### STATE 2 — Human replied to escalation
+### STATE 2 — Assign from backlog
 
-**Condition:** Open issue with `status:awaiting-human` has a reply from a human stakeholder — via GitHub OR Telegram.
+**Condition:** No `type:epic` has `status:in-progress` AND `status:backlog` items exist.
 
 ```bash
+# Check nothing is in-progress
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "status:awaiting-human" --state open \
-    --json number,title,url,comments
+  gh issue list --repo "$REPO" --label "type:epic,status:in-progress" --state open \
+    --json number -q 'length'
+done
+
+# Check backlog exists
+for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
+  gh issue list --repo "$REPO" --label "status:backlog" --state open \
+    --json number,title,labels,createdAt
 done
 ```
-For each issue: find PM escalation comment timestamp. Check for human reply after it (from `$CEO_HANDLE`, `$CTO_HANDLE`, or `$EM_HANDLE`).
 
-Also check: if invoked from Telegram (not cron) and there is an open `status:awaiting-human` issue, the incoming message may be providing direction.
+If something is `in-progress`, skip this state. If backlog is empty, skip.
 
-**If matched → `load_skill('pm-state-2')`**
+**If matched → `load_skill('pm-assign')`**
 
 ---
 
-### STATE 3 — Unprocessed request or bug
+### STATE 3 — Blocked with human reply
 
-**Condition:** An open `type:request` issue exists, OR an open `type:bug` issue with no `status:*` label exists.
+**Condition:** A `status:blocked` issue exists AND has a comment from a human ($CEO_HANDLE, $CTO_HANDLE, or $EM_HANDLE) posted AFTER the blocking comment.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:request" --state open \
-    --json number,title,url
-done
-```
-Also check for bugs without any status label:
-```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:bug" --state open \
-    --json number,title,url,labels \
-    --jq '[.[] | select(.labels | map(.name) | all(test("^status:") | not))]'
+  gh issue list --repo "$REPO" --label "status:blocked" --state open \
+    --json number,title,comments
 done
 ```
 
-**If matched → `load_skill('pm-state-2b')`**
+For each blocked issue: check if a human commented after the agent's blocking comment.
+
+**If matched → `load_skill('pm-unblock')`**
 
 ---
 
-### STATE 4 — Assign next from backlog
+### STATE 4 — Epic complete
 
-**Condition:** No `status:in-development` exists across both repos, AND at least one item with `status:backlog` exists, AND one of:
-- **Path A (bugs bypass queue):** A `type:bug` with `status:backlog` exists — assign it regardless of `status:awaiting-acceptance`. Bugs are urgent fixes that should not wait for unrelated acceptance reviews.
-- **Path B (epics wait):** A `type:epic` with `status:backlog` exists AND no `status:awaiting-acceptance` exists (acceptance blocks epic assignment).
-
-```bash
-# Check nothing is in-development (required for both paths)
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "status:in-development" --state open \
-    --json number --jq 'length'
-done
-# All must be 0
-
-# Path A: Check for backlog bugs (bypass awaiting-acceptance)
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:bug,status:backlog" --state open \
-    --json number,title,url,labels
-done
-# If any found → match immediately (skip awaiting-acceptance check)
-
-# Path B: Check for backlog epics (blocked by awaiting-acceptance)
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "status:awaiting-acceptance" --state open \
-    --json number --jq 'length'
-done
-# All must be 0, then:
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:epic,status:backlog" --state open \
-    --json number,title,url,labels
-done
-```
-
-**If matched → `load_skill('pm-state-3-assign')`**
-
----
-
-### STATE 5 — Dev is stale
-
-**Condition:** Open `type:epic` or `type:story` with `status:in-development`, no activity for >90 minutes, and last PM comment is not an unanswered status-check ping.
+**Condition:** An epic has all sub-issues with `status:done`.
 
 ```bash
 for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "status:in-development" --state open \
-    --json number,title,url,updatedAt,comments,labels
+  gh issue list --repo "$REPO" --label "type:epic" --state open \
+    --json number,title
 done
 ```
-Check `updatedAt > 90 min ago`. Check last comment is not an unanswered PM ping.
 
-**Additional logic for epics:** If the issue is `type:epic`:
-- If it has a dev comment containing "## Implementation Plan" but no sub-issues yet → dev is mid-decomposition, **skip** (not stale)
-- If it has no plan comment AND no sub-issues after 90 min → genuinely stale, act
-- If it has sub-issues and a story in `status:in-development` → check the story's `updatedAt` instead
-
-**If matched → action is simple, no sub-skill needed:**
-```
-Post: "Status check — @$DEV_AGENT_HANDLE please update on progress or flag blockers."
-```
-
----
-
-### STATE 6 — Epic/bug completed, request acceptance
-
-**Condition A (epic):** Open `type:epic` where `sub_issues_summary.completed == sub_issues_summary.total` AND `total > 0` AND the epic does NOT have `status:awaiting-acceptance`.
-
+For each open epic, check sub-issue completion:
 ```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:epic" --state open \
-    --json number,title,url,labels
-done
+gh api repos/$ORG/$REPO_NAME/issues/$EPIC_NUM \
+  --jq '{total: .sub_issues_summary.total, completed: .sub_issues_summary.completed}'
 ```
-For each epic (skip if it already has `status:awaiting-acceptance`):
-```bash
-gh api repos/$REPO/issues/$EPIC_NUM --jq '{total: .sub_issues_summary.total, completed: .sub_issues_summary.completed}'
-```
-If `completed == total` AND `total > 0` AND no `status:awaiting-acceptance` label → act.
 
-**Condition B (bug):** Open `type:bug` with `status:done` AND no `status:awaiting-acceptance` label.
+If `completed == total` AND `total > 0`:
 
-```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:bug,status:done" --state open \
-    --json number,title,url,labels
-done
-```
-If any match exists AND does not already have `status:awaiting-acceptance` → act.
-
-**If matched → `load_skill('pm-state-6-acceptance')`**
-
----
-
-### STATE 7 — Acceptance reply received
-
-**Condition:** Open issue with `status:awaiting-acceptance` that has a human reply (from `$CEO_HANDLE`, `$CTO_HANDLE`, or `$EM_HANDLE`) after the acceptance request comment.
-
-```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "status:awaiting-acceptance" --state open \
-    --json number,title,url,comments,labels
-done
-```
-For each issue: find the acceptance request comment (contains "Acceptance Review Requested" or "verify the fix"). Check for a human reply after it.
-
-Also check: if invoked from Telegram (not cron) and there is an open `status:awaiting-acceptance` issue, the incoming message may be providing acceptance feedback — act immediately.
-
-**If matched → `load_skill('pm-state-4')`**
-
----
-
-### STATE 8 — Epic has no implementation plan *(recovery, was STATE 7)*
-
-**Condition:** Open `type:epic` with `status:in-development` assigned to `$DEV_AGENT_HANDLE`, has been open >30 minutes, has zero sub-issues, and no comment from `$DEV_AGENT_HANDLE` containing "## Implementation Plan" or "blocked" or "unclear".
-
-```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO \
-    --label "type:epic,status:in-development" --state open \
-    --assignee "$DEV_AGENT_HANDLE" \
-    --json number,title,url,updatedAt,comments
-done
-```
-For each epic: check `sub_issues_summary.total == 0`, no plan comment, no blocker comment, open >30 min.
-
-**If matched → `load_skill('pm-state-5')`**
-
----
-
-### STATE 9 — Nothing to do *(lowest priority, was STATE 8)*
-
-**Condition:** No open `type:epic` issues, no `type:request` issues, no `type:bug` issues, no `status:awaiting-human` issues, no `status:awaiting-acceptance` issues, no `status:in-development` issues, no `status:backlog` issues.
-
-```bash
-for REPO in "$FRONTEND_REPO" "$BACKEND_REPO"; do
-  gh issue list --repo $REPO --label "type:epic" --state open --json number --jq 'length'
-  gh issue list --repo $REPO --label "type:request" --state open --json number --jq 'length'
-  gh issue list --repo $REPO --label "status:awaiting-human" --state open --json number --jq 'length'
-  gh issue list --repo $REPO --label "status:awaiting-acceptance" --state open --json number --jq 'length'
-  gh issue list --repo $REPO --label "status:in-development" --state open --json number --jq 'length'
-  gh issue list --repo $REPO --label "status:backlog" --state open --json number --jq 'length'
-done
-```
-All must be 0.
-
-**If matched → `load_skill('pm-state-7')`**
+**If matched → `load_skill('pm-close-epic')`**
 
 ---
 
 ## General Rules
 
 - **One action per cron run.** First match wins. Stop after acting.
-- **If no state matches, report "No-op" and stop.** Never improvise actions outside the defined states. Statuses like `ready-for-review`, `in-review`, and `changes-requested` are handled by other agents — do not escalate, ping, or message about them.
-- **One Telegram message per cron run.** If the downstream action already sends a Telegram, don't send another.
-- **Never merge PRs.** Merging is the QA agent's responsibility.
-- **Never create stories or tasks.** Decomposition is the dev agent's responsibility. You create epics only.
-- **Never create vague epics.** Can't write clear requirements? Escalate first.
-- **Don't double-ping.** Check for existing unanswered PM comments before acting.
-- **sub_issue_id is always the database ID, never the issue number.** Use `gh api repos/$REPO/issues/$NUM --jq '.id'` to get it.
-- **One epic per feature.** Use `scope:both` for features that span FE and BE. Never create separate FE and BE epics for the same feature.
-- **GitHub is source of truth for dev. Telegram is for CEO alignment.**
-
-## Sending Telegram Messages
-
-Use Bash + curl. Extract `$TELEGRAM_CHAT_ID` from `people.qmd` and `$TELEGRAM_BOT_TOKEN` from the environment:
-```bash
-curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-  -H "Content-Type: application/json" \
-  -d "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"MESSAGE\", \"parse_mode\": \"Markdown\"}"
-```
-If `$TELEGRAM_CHAT_ID` is not set, fall back to tagging `@$CEO_HANDLE`, `@$CTO_HANDLE`, and `@$EM_HANDLE` in a GitHub comment with `status:awaiting-human`.
+- **If no state matches, log "No-op" and stop.** Do not post to GitHub. Do not ping the CEO.
+- **Brainstorming happens via Telegram, not cron.** When CEO sends a message, the Telegram handler loads `pm-brainstorm`. The cron state machine never does brainstorming.
+- **No intermediate GitHub state.** The cron never encounters an issue that Telegram is actively working on.
+- **Never decompose epics.** Jeff handles decomposition during `eng-epic-cycle`.
+- **Never merge PRs.** That's Merlin's responsibility.
+- **Never write code.** Delegate all technical work to Jeff.
+- **GitHub is the source of truth for milestones.**
