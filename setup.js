@@ -144,7 +144,9 @@ function loadExistingContext() {
     goals: [], people: [], projects: [],
   };
 
-  const baseFile = join(MEMORY_DIR, "base-context.qmd");
+  const contextBaseFile = join(CONTEXT_DIR, "base-context.qmd");
+  const legacyBaseFile = join(MEMORY_DIR, "base-context.qmd");
+  const baseFile = existsSync(contextBaseFile) ? contextBaseFile : legacyBaseFile;
   if (existsSync(baseFile)) {
     const content = readFileSync(baseFile, "utf-8");
     ctx.agentName = parseQmdField(content, "Name");
@@ -210,6 +212,7 @@ function loadExistingContext() {
 const ROOT = resolve(".");
 const ENV_PATH = join(ROOT, ".env.local");
 const PROFILE_DIR = join(ROOT, "profile");
+const CONTEXT_DIR = join(PROFILE_DIR, "context");
 const MEMORY_DIR = join(PROFILE_DIR, "memory");
 const DATA_DIR = join(PROFILE_DIR, "data");
 const CORE_MEMORY_DIR = join(ROOT, "memory"); // template source
@@ -491,6 +494,7 @@ async function setupProfile() {
   info("profile/ will hold your memories, skills, and data (cron jobs, projects).");
   info("It's gitignored from the core repo and can be its own git repo.\n");
 
+  mkdirSync(join(PROFILE_DIR, "context"), { recursive: true });
   mkdirSync(join(PROFILE_DIR, "memory"), { recursive: true });
   mkdirSync(join(PROFILE_DIR, "skills"), { recursive: true });
   mkdirSync(join(PROFILE_DIR, "data"), { recursive: true });
@@ -625,8 +629,8 @@ ${rulesSection}
 - Keep it short and durable
 `;
 
-  writeFileSync(join(MEMORY_DIR, "base-context.qmd"), baseContext);
-  success("Wrote memory/base-context.qmd");
+  writeFileSync(join(CONTEXT_DIR, "base-context.qmd"), baseContext);
+  success("Wrote context/base-context.qmd");
 
   // ── goals.qmd ─────────────────────────────────────────────────────
 
@@ -781,8 +785,8 @@ function finish() {
 
   console.log("");
   info("Next steps:");
-  info("  1. Review and edit profile/memory/*.qmd to add more context");
-  info("     (Set 'Custom system prompt' in base-context.qmd to override the auto-generated one)");
+  info("  1. Review and edit profile/context/*.qmd and profile/memory/*.qmd to add more context");
+  info("     (Set 'Custom system prompt' in context/base-context.qmd to override the auto-generated one)");
   info("  2. Run: npm run dev");
   info("  3. Open: http://localhost:" + (env.PORT || "3000"));
   if (enabled.telegram) info("  4. Open your bot in Telegram and send a message");
