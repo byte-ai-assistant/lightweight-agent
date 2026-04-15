@@ -26,8 +26,8 @@ Extract from loaded memory before running any commands:
 
 | Variable | Where to find it |
 |---|---|
-| `$FRONTEND_REPO` | `projects.qmd` → frontend repository (e.g. `sparkiq-gh/sparkiq-erp-fe`) |
-| `$BACKEND_REPO` | `projects.qmd` → backend repository (e.g. `sparkiq-gh/sparkiq-erp-be`) |
+| `$FRONTEND_REPO` | `projects.qmd` → frontend repository (e.g. `sparkiq-gh/erp-fe`) |
+| `$BACKEND_REPO` | `projects.qmd` → backend repository (e.g. `sparkiq-gh/erp-be`) |
 | `$ORG` | `projects.qmd` → GitHub org name |
 | `$MY_HANDLE` | `people.qmd` → dev agent GitHub handle |
 | `$PM_AGENT_HANDLE` | `people.qmd` → PM agent GitHub handle (Sparky) |

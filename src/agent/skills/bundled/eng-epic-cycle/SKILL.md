@@ -41,8 +41,8 @@ Load skill: `eng-write-plan`
 For each story, in dependency order:
 
 **3a. Create branch** (one per repo per epic):
-- BE: `epic/N-slug` on `sparkiq-erp-be`
-- FE: `epic/N-slug` on `sparkiq-erp-fe`
+- BE: `epic/N-slug` on `erp-be`
+- FE: `epic/N-slug` on `erp-fe`
 - Branch from `dev`
 
 **3b. Implement with TDD** — load skill: `eng-tdd`

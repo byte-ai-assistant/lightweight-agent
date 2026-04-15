@@ -26,8 +26,8 @@ Extract from loaded memory before running any commands:
 
 | Variable | Source |
 |---|---|
-| `$FRONTEND_REPO` | `projects.qmd` → `sparkiq-gh/sparkiq-erp-fe` |
-| `$BACKEND_REPO` | `projects.qmd` → `sparkiq-gh/sparkiq-erp-be` |
+| `$FRONTEND_REPO` | `projects.qmd` → `sparkiq-gh/erp-fe` |
+| `$BACKEND_REPO` | `projects.qmd` → `sparkiq-gh/erp-be` |
 | `$ORG` | `projects.qmd` → `sparkiq-gh` |
 | `$MY_HANDLE` | `people.qmd` → QA agent GitHub handle |
 | `$DEV_AGENT_HANDLE` | `people.qmd` → dev agent GitHub handle (Jeff) |
