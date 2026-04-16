@@ -63,6 +63,11 @@ For each story, in dependency order:
 
 **3f. Repeat** for next story in same repo. When all stories for a repo are done:
 
+**3f-bis. Update knowledge graph** — load skill: `eng-graphify`
+- Run `graphify --update` to capture new code in the graph
+- Commit `graphify-out/` changes to the epic branch
+- This ensures the graph reflects all stories before the PR
+
 **3g. Push and open PR**
 - Push epic branch to remote
 - Open PR: `"Epic #N: title. Closes #story1, Closes #story2..."`
@@ -76,6 +81,7 @@ For each story, in dependency order:
   - Do BE endpoints match what FE consumes?
   - Are types consistent across repos?
   - Any integration gaps between stories?
+- **Update knowledge graph** in each repo that was modified (the graph now reflects the full epic)
 - **Update** `be-repo-context` and `fe-repo-context` skills with new modules/patterns
 - **Post comment** on epic: "All stories implemented. PRs ready for review."
 - EXIT

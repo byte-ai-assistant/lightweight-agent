@@ -23,10 +23,11 @@ Do NOT jump to the first approach that comes to mind. Consider at least 2 altern
 
 ### 2. Explore the Codebase
 
-- What already exists that can be reused?
-- What patterns does the codebase follow for similar features?
-- What modules/services will this touch?
-- Are there existing tests that show the expected patterns?
+- Load `eng-graphify`. Build or update the knowledge graph.
+- Read the graph report: god nodes, communities, surprising connections.
+- Query the graph for entities related to the epic requirements.
+- Also load `be-repo-context` / `fe-repo-context` for schema tables and conventions.
+- Then explore specific files: what already exists that can be reused? What patterns does the codebase follow? What modules/services will this touch?
 
 ### 3. Propose 2-3 Approaches
 
