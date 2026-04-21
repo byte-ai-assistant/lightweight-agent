@@ -49,6 +49,13 @@ The following skills are bundled with the framework and available to all agent i
 - `qa-structural-audit` — 6-pass structural review (security, data integrity, DB, API, tests, architecture)
 - `qa-deployment-triage` — Vercel deployment monitoring and bug creation
 
+### Science Skills (human-invoked research)
+- `sci-agent` — Human-invoked dispatcher (4 states); routes fresh questions through the full cycle
+- `sci-research-cycle` — Orchestrator: literature survey → knowledge graph → hypothesis, with user gates
+- `sci-research` — Sourced literature/dataset/replication survey; saves raw materials to `docs/sci/raw/<topic>/`
+- `sci-graphify` — Builds a knowledge graph via graphify from the raw materials; identifies god nodes, communities, and surprising cross-community bridges that seed novel hypotheses
+- `sci-hypothesize` — Turns research + graph insights into falsifiable hypotheses with predicted effect size, mechanism, pre-specified kill criteria, and ruled-out alternatives
+
 ## Cron & Preflight Architecture
 
 - **Cron jobs** (`profile/data/cron-jobs.json`): scheduled recurring prompts that trigger the agent's state machine
