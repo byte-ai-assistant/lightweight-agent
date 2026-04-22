@@ -2,7 +2,7 @@ import { query, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKResultMessage, SDKSystemMessage, Options } from "@anthropic-ai/claude-agent-sdk";
 import fs from "fs";
 import path from "path";
-import { CONTEXT_DIR, MEMORY_DIR, SKILLS_DIR, SESSIONS_FILE } from "../paths.js";
+import { CONTEXT_DIR, MEMORY_DIR, SKILLS_DIR, SESSIONS_FILE, ROOT } from "../paths.js";
 
 
 // Memory tools
@@ -520,6 +520,10 @@ export async function runAgent(
 - **Project Board**: Shared project tracker (data/projects.json). Always auto-loaded. Use project tools to manage projects and tasks.
 - **Subagents**: Spawn subagent tasks for parallel or complex work.
 
+## Working Directory
+Your working directory is \`${ROOT}\`.
+When you write, read, edit, or glob files using bare or relative paths like \`docs/sci/research/foo.md\`, they resolve under this directory — that relative path means \`${ROOT}/docs/sci/research/foo.md\`. Do not write to the user's home directory or anywhere outside this root unless the user or an active skill explicitly names an absolute path or a different project location (for example, when working on a separate project whose location is declared on the project board or named by the user).
+
 ## Memory Architecture
 You have three tiers of memory:
 
@@ -578,6 +582,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
   }
 
   const options: Options = {
+    cwd: ROOT,
     systemPrompt,
     maxBudgetUsd: 8.00,
     allowedTools: [

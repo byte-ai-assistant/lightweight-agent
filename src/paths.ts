@@ -1,6 +1,6 @@
 import path from "path";
 
-const ROOT = process.cwd();
+export const ROOT = process.cwd();
 const PROFILE_DIR = path.join(ROOT, "profile");
 
 export const CONTEXT_DIR   = path.join(PROFILE_DIR, "context");

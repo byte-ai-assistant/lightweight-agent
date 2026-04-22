@@ -14,6 +14,12 @@ Shareable AI assistant starter built with the Claude Agent SDK, Next.js, Express
 - Keep example memory generic and safe to publish
 - Prefer adding reusable skills over project-specific one-offs
 
+## File locations
+
+- The agent's default output root is this project root. Bare/relative paths in agent-written files (e.g. `docs/sci/research/foo.md`) resolve here, never in the user's home.
+- `docs/` under this root is the scratch/output tree for notes, research artifacts, and reports. Skills that write outputs (e.g. `sci-research`, `sci-hypothesize`) should use relative paths like `docs/sci/...`.
+- External project work (e.g. `erp-be`, `erp-fe`, or any project listed on the project board with its own `location`) must be opted into explicitly by a skill or by the user naming an absolute path / project name. Never write outside this root by default.
+
 ## Structure
 
 - `src/` — app and agent source
