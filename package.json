@@ -15,6 +15,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "agent-browser": "^0.21.4",
     "better-sqlite3": "^12.6.2",
+    "cron-parser": "^5.5.0",
     "dotenv": "^17.3.1",
     "express": "^5.1.0",
     "gray-matter": "^4.0.3",

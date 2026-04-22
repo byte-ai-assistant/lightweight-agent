@@ -6,6 +6,7 @@ import path from "path";
 import crypto from "crypto";
 import { CRON_FILE } from "../../paths.js";
 import { evaluatePreflightGate } from "./preflight.js";
+import { pushEvent } from "../events.js";
 
 interface CronJob {
   id: string;
@@ -63,14 +64,29 @@ function scheduleCronJob(job: CronJob) {
     if (onCronTrigger) {
       if (runningJobs.has(job.id)) {
         process.stderr.write(`[cron] Skipped [${job.id}] ${job.description}: previous run still in progress\n`);
+        pushEvent(
+          "cron_skip",
+          { id: job.id, description: job.description, reason: "previous run still in progress" },
+          `cron:${job.id}`,
+        );
         return;
       }
       const gate = await evaluatePreflightGate(job.id);
       if (!gate.shouldRun) {
         process.stderr.write(`[cron] Skipped [${job.id}] ${job.description}: ${gate.reason}\n`);
+        pushEvent(
+          "cron_skip",
+          { id: job.id, description: job.description, reason: gate.reason },
+          `cron:${job.id}`,
+        );
         return;
       }
       runningJobs.add(job.id);
+      pushEvent(
+        "cron_fire",
+        { id: job.id, description: job.description, schedule: job.schedule },
+        `cron:${job.id}`,
+      );
       try {
         await onCronTrigger(job);
       } finally {
@@ -84,6 +100,14 @@ function scheduleCronJob(job: CronJob) {
 
 export function getActiveCronCount(): number {
   return activeTasks.size;
+}
+
+export function getCronJobs(): CronJob[] {
+  return loadJobs();
+}
+
+export function getRunningJobIds(): string[] {
+  return Array.from(runningJobs);
 }
 
 // Restore saved cron jobs on startup

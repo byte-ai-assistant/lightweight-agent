@@ -36,6 +36,8 @@ import { memorySearch } from "./tools/memory-search.js";
 import { delegateToAgent } from "./tools/delegate.js";
 // Chat history
 import { appendChatEntry, searchChatHistory } from "./chat-history.js";
+// Event log
+import { pushEvent } from "./events.js";
 import { searchChatHistoryTool, getRecentChatsTool } from "./tools/chat-history.js";
 // Consolidation
 import { consolidateSession } from "./consolidation.js";
@@ -233,13 +235,17 @@ function loadProjectInstructions(message: string): string {
   return instructions.join("\n\n");
 }
 
-async function autoRetrieveMemories(message: string): Promise<string> {
+async function autoRetrieveMemories(
+  message: string
+): Promise<{ prompt: string; hits: { file: string; heading: string; score: number }[] }> {
   const results = await searchMemory(message, 5);
-  if (results.length === 0) return "";
+  if (results.length === 0) return { prompt: "", hits: [] };
 
-  return results
+  const prompt = results
     .map((r) => `--- ${r.file} > ${r.heading} ---\n${r.content}`)
     .join("\n\n");
+  const hits = results.map((r) => ({ file: r.file, heading: r.heading, score: r.score }));
+  return { prompt, hits };
 }
 
 const CHAT_GIST_THRESHOLD = 0.35;
@@ -405,18 +411,76 @@ function friendlyToolName(name: string): string {
   return map[name] ?? `Using ${name.replace(/_/g, " ")}…`;
 }
 
+export type AgentEvent =
+  | { type: "status"; text: string }
+  | { type: "tool"; name: string; input?: unknown }
+  | { type: "memory_hit"; path: string; heading: string; score: number }
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheWriteTokens: number;
+      costUsd: number;
+    };
+
+// Never let an event-emission failure bubble up into the SDK's async iterator —
+// the SDK treats synchronous throws inside its work loop as "error_during_execution".
+function safeEmit(
+  cb: ((event: AgentEvent) => void) | undefined,
+  event: AgentEvent,
+): void {
+  if (!cb) return;
+  try {
+    cb(event);
+  } catch (e: any) {
+    process.stderr.write(`[agent-event] emit failed (${event.type}): ${e?.message ?? e}\n`);
+  }
+}
+
+function safePush(
+  kind: Parameters<typeof pushEvent>[0],
+  payload: Parameters<typeof pushEvent>[1],
+  userId?: string,
+): void {
+  try {
+    pushEvent(kind, payload, userId);
+  } catch (e: any) {
+    process.stderr.write(`[agent-event] push failed (${kind}): ${e?.message ?? e}\n`);
+  }
+}
+
+function safePreview(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? "";
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return "(unserializable)";
+    }
+  }
+}
+
 export async function runAgent(
   userId: string,
   message: string,
-  onStatus?: (status: string) => void
+  onEvent?: (event: AgentEvent) => void
 ): Promise<string> {
+  const emitStatus = (text: string) => safeEmit(onEvent, { type: "status", text });
+
   const baseContext = loadBaseContext();
   const projectBoard = loadProjectBoard();
   const projectInstructions = loadProjectInstructions(message);
-  const [memories, chatGists] = await Promise.all([
+  const [memoriesResult, chatGists] = await Promise.all([
     autoRetrieveMemories(message),
     autoRetrieveChatGists(message),
   ]);
+  const memories = memoriesResult.prompt;
+  for (const hit of memoriesResult.hits) {
+    safeEmit(onEvent, { type: "memory_hit", path: hit.file, heading: hit.heading, score: hit.score });
+    safePush("memory", { path: hit.file, heading: hit.heading, score: hit.score }, userId);
+  }
   const { registryPrompt: skillIndex, skillsCache } = await loadSkillRegistry();
   const agentEmail = getConfiguredAgentEmail();
 
@@ -575,7 +639,16 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
   }
 
   async function executeQuery(opts: Options): Promise<string> {
+    let msgCount = 0;
+    process.stderr.write(`[agent-run] start userId=${userId} resume=${opts.resume ?? "(fresh)"} mcp=${Object.keys(opts.mcpServers ?? {}).join(",")}\n`);
+    try {
     for await (const msg of query({ prompt: message, options: opts })) {
+      msgCount++;
+      if (!msg || typeof msg !== "object" || typeof (msg as any).type !== "string") {
+        process.stderr.write(`[agent-run] skipped malformed msg #${msgCount}: ${safePreview(msg)}\n`);
+        continue;
+      }
+
       // Capture session ID for future resumption
       if (msg.type === "system" && (msg as SDKSystemMessage).subtype === "init") {
         sessions.set(userId, {
@@ -584,7 +657,7 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
           messageCount: (sessions.get(userId)?.messageCount ?? 0) + 1,
         });
         saveSessions();
-        onStatus?.("Thinking…");
+        emitStatus("Thinking…");
       }
 
       // Log tool use
@@ -596,9 +669,14 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
         const content = (msg as any).message?.content;
         if (Array.isArray(content)) {
           for (const block of content) {
+            if (!block || typeof block !== "object" || typeof (block as any).type !== "string") continue;
             if (block.type === "tool_use") {
-              process.stderr.write(`[tool-call] ${block.name}(${JSON.stringify(block.input).slice(0, 200)})\n`);
-              onStatus?.(friendlyToolName(block.name));
+              const name: string = typeof block.name === "string" ? block.name : "(unknown)";
+              const inputPreview = safePreview(block.input);
+              process.stderr.write(`[tool-call] ${name}(${inputPreview.slice(0, 200)})\n`);
+              safeEmit(onEvent, { type: "tool", name, input: block.input });
+              safePush("tool", { name, input: block.input }, userId);
+              emitStatus(friendlyToolName(name));
             }
           }
         }
@@ -612,43 +690,110 @@ ${memories || "(No relevant memories found. Use memory_search for deeper queries
         } else if (resultMsg.subtype === "error_max_turns") {
           result = "I hit my processing limit on that one. Could you try breaking it into smaller steps, or send a follow-up to continue?";
         } else {
-          const errorDetail = "errors" in resultMsg ? resultMsg.errors.join("\n") : "";
-          // Detect stale session errors so we can retry fresh
-          if (sessionId && errorDetail.includes("No conversation found with session ID")) {
-            throw new Error(`stale_session: ${errorDetail}`);
+          const rawErrors = "errors" in resultMsg ? (resultMsg as any).errors : undefined;
+          const errorDetail = Array.isArray(rawErrors) ? rawErrors.join("\n") : "";
+          const numTurns = (resultMsg as any).num_turns ?? 0;
+          // Loud stderr log so we can actually debug these in server output.
+          process.stderr.write(
+            `[agent-error] subtype=${resultMsg.subtype} stop=${(resultMsg as any).stop_reason ?? "?"} turns=${numTurns}\n${errorDetail || "(no errors array)"}\n`,
+          );
+          // Surface in the rolling event log so it shows in the UI's Logs drawer.
+          safePush(
+            "error",
+            {
+              subtype: resultMsg.subtype,
+              message: errorDetail || `(${resultMsg.subtype})`,
+              stopReason: (resultMsg as any).stop_reason,
+              numTurns,
+            },
+            userId,
+          );
+          // Stale/corrupted session detection: if we were resuming and the child process
+          // errored before any turn (typical signature: "error_during_execution" at
+          // turns=0 with an internal TypeError, or the classic "No conversation found"),
+          // drop the session reference and throw so the outer catch retries fresh.
+          const looksLikeStaleSession =
+            sessionId &&
+            (errorDetail.includes("No conversation found with session ID") ||
+              (resultMsg.subtype === "error_during_execution" && numTurns === 0));
+          if (looksLikeStaleSession) {
+            throw new Error(`stale_session: ${errorDetail || resultMsg.subtype}`);
           }
           result = `Error: ${resultMsg.subtype}` +
             (errorDetail ? `\n${errorDetail}` : "");
         }
-        // Log token usage from modelUsage (aggregated across all models)
-        const models = resultMsg.modelUsage;
-        const totals = Object.values(models).reduce(
-          (acc, m) => ({
-            input: acc.input + m.inputTokens,
-            output: acc.output + m.outputTokens,
-            cacheRead: acc.cacheRead + m.cacheReadInputTokens,
-            cacheWrite: acc.cacheWrite + m.cacheCreationInputTokens,
-          }),
-          { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
-        );
+        // Log token usage from modelUsage (aggregated across all models). Guard against
+        // missing/partial usage on error results.
+        const models = (resultMsg as any).modelUsage;
+        const totals = models && typeof models === "object"
+          ? Object.values(models as Record<string, any>).reduce(
+              (acc, m: any) => ({
+                input: acc.input + (m?.inputTokens ?? 0),
+                output: acc.output + (m?.outputTokens ?? 0),
+                cacheRead: acc.cacheRead + (m?.cacheReadInputTokens ?? 0),
+                cacheWrite: acc.cacheWrite + (m?.cacheCreationInputTokens ?? 0),
+              }),
+              { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            )
+          : { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+        const costUsd = (resultMsg as any).total_cost_usd ?? 0;
         process.stderr.write(
-          `[tokens] in=${totals.input} out=${totals.output} cache_read=${totals.cacheRead} cache_write=${totals.cacheWrite} cost=$${resultMsg.total_cost_usd?.toFixed(4)}\n`
+          `[tokens] in=${totals.input} out=${totals.output} cache_read=${totals.cacheRead} cache_write=${totals.cacheWrite} cost=$${typeof costUsd === "number" ? costUsd.toFixed(4) : "0"}\n`,
+        );
+        safeEmit(onEvent, {
+          type: "usage",
+          inputTokens: totals.input,
+          outputTokens: totals.output,
+          cacheReadTokens: totals.cacheRead,
+          cacheWriteTokens: totals.cacheWrite,
+          costUsd,
+        });
+        safePush(
+          "usage",
+          {
+            inputTokens: totals.input,
+            outputTokens: totals.output,
+            cacheReadTokens: totals.cacheRead,
+            cacheWriteTokens: totals.cacheWrite,
+            costUsd,
+          },
+          userId,
         );
       }
     }
+    process.stderr.write(`[agent-run] done msgs=${msgCount} result_len=${result.length}\n`);
     return result;
+    } catch (iterErr: any) {
+      process.stderr.write(
+        `[agent-run] iterator threw after ${msgCount} msgs: ${iterErr?.message ?? iterErr}\n` +
+          `STACK:\n${iterErr?.stack ?? "(no stack)"}\n`,
+      );
+      safePush(
+        "error",
+        { subtype: "iterator_threw", message: iterErr?.message ?? String(iterErr) },
+        userId,
+      );
+      throw iterErr;
+    }
   }
 
   try {
     await executeQuery(options);
   } catch (err: any) {
-    // If resume fails (stale/corrupted session), retry without resume
-    if (sessionId && !result) {
-      process.stderr.write(`[sessions] Resume failed for ${userId}, retrying fresh: ${err.message}\n`);
+    const msg: string = err?.message ?? "";
+    // Retry fresh if: (a) we were resuming and the run produced no usable result, OR
+    // (b) we explicitly detected a stale/corrupted session signature (even if an
+    // error result was stored, we discard it and try again without resume).
+    const isStale = msg.startsWith("stale_session:");
+    if (sessionId && (isStale || !result)) {
+      process.stderr.write(
+        `[sessions] Resume failed for ${userId}, retrying fresh (reason=${isStale ? "stale" : "no_result"}): ${msg}\n`,
+      );
       sessions.delete(userId);
       saveSessions();
-      const freshOptions = { ...options };
-      delete freshOptions.resume;
+      result = ""; // discard any poisoned error-string captured during the bad run
+      const freshOptions: Options = { ...options };
+      delete (freshOptions as any).resume;
       try {
         await executeQuery(freshOptions);
       } catch (retryErr: any) {
