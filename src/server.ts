@@ -34,6 +34,20 @@ import cron from "node-cron";
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000");
 
+// Keep the server alive if a background task throws or rejects. Without these,
+// Node 20+ terminates the process on unhandled rejections, which has been
+// silently taking the server down mid-SSE on Claude Code subprocess failures.
+process.on("unhandledRejection", (reason: any, promise) => {
+  process.stderr.write(
+    `\n==== unhandledRejection ====\n${reason?.message ?? reason}\nSTACK:\n${reason?.stack ?? "(no stack)"}\n============================\n`,
+  );
+});
+process.on("uncaughtException", (err: any) => {
+  process.stderr.write(
+    `\n==== uncaughtException ====\n${err?.message ?? err}\nSTACK:\n${err?.stack ?? "(no stack)"}\n===========================\n`,
+  );
+});
+
 async function main() {
   // Clean env after dotenv loaded placeholders
   if (process.env.ANTHROPIC_API_KEY?.startsWith("your-")) {
@@ -163,7 +177,11 @@ async function main() {
       );
       sendEvent("error", { error: errMsg });
     } finally {
-      res.end();
+      try {
+        res.end();
+      } catch {
+        /* socket already closed */
+      }
     }
   });
 

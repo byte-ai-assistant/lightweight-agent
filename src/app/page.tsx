@@ -116,8 +116,9 @@ const themes = {
     accentWash: "rgba(240,121,94,0.10)",
     accentWashStrong: "rgba(240,121,94,0.20)",
     accentInk: "#0d0e12",
-    userBubble: "#f0795e",
-    userBubbleText: "#0d0e12",
+    userBubble: "#262a36",
+    userBubbleBorder: "#333746",
+    userBubbleText: "#ede9df",
     success: "#7dc97e",
     warn: "#e0b04a",
     danger: "#e06a6a",
@@ -143,8 +144,9 @@ const themes = {
     accentWash: "rgba(196,86,63,0.08)",
     accentWashStrong: "rgba(196,86,63,0.18)",
     accentInk: "#faf5e8",
-    userBubble: "#c4563f",
-    userBubbleText: "#faf5e8",
+    userBubble: "#e8dcc3",
+    userBubbleBorder: "#d3c5a3",
+    userBubbleText: "#1b1a18",
     success: "#3d8a41",
     warn: "#a87520",
     danger: "#b04040",
@@ -196,6 +198,35 @@ function prettyToolName(name: string): string {
 function stemPath(p: string): string {
   return (p.split("/").pop() ?? p).replace(/\.qmd$/i, "");
 }
+function shortPath(p: string): string {
+  const parts = p.split("/").filter(Boolean);
+  if (parts.length <= 2) return p;
+  return "…/" + parts.slice(-2).join("/");
+}
+function describeToolInput(name: string, input: unknown): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const i = input as Record<string, any>;
+  const trim = (s: string, n = 90) => (s.length > n ? s.slice(0, n) + "…" : s);
+
+  // Priority order matches how busy tools actually surface useful context.
+  if (typeof i.query === "string") return trim(i.query);
+  if (typeof i.question === "string") return trim(i.question);
+  if (typeof i.pattern === "string") return trim(i.pattern);
+  if (typeof i.command === "string") return trim(i.command);
+  if (typeof i.url === "string") return trim(i.url, 70);
+  if (typeof i.file_path === "string") return shortPath(i.file_path);
+  if (typeof i.path === "string") return shortPath(i.path);
+  if (typeof i.skillName === "string") return i.skillName;
+  if (typeof i.to === "string") return `to ${i.to}`;
+  if (typeof i.subject === "string") return trim(i.subject, 60);
+  if (typeof i.description === "string") return trim(i.description, 70);
+  if (typeof i.prompt === "string") return trim(i.prompt, 80);
+  if (typeof i.message === "string") return trim(i.message, 80);
+  if (typeof i.text === "string") return trim(i.text, 70);
+  if (typeof i.name === "string") return i.name;
+
+  return undefined;
+}
 function friendlyChannel(userId?: string): { label: string; tone: string } | null {
   if (!userId) return null;
   if (userId.startsWith("cron:")) return { label: userId, tone: "cron" };
@@ -211,11 +242,11 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [streamEvents, setStreamEvents] = useState<
-    { id: number; kind: "tool" | "memory"; text: string; detail?: string }[]
-  >([]);
-  const streamIdRef = useRef(0);
+  const [activeOp, setActiveOp] = useState<
+    | { kind: "tool"; name: string; detail?: string }
+    | { kind: "memory"; path: string; score: number }
+    | null
+  >(null);
 
   const [identity, setIdentity] = useState<Identity>({ name: "Lightweight Agent" });
   const [snapshot, setSnapshot] = useState<StateSnapshot | null>(null);
@@ -342,7 +373,7 @@ export default function Home() {
   // ── Scroll tracking ──
   useEffect(() => {
     if (atBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, loading, atBottom, streamEvents.length, activeTool]);
+  }, [messages, loading, atBottom, activeOp]);
 
   const onScroll = useCallback(() => {
     const el = scrollerRef.current;
@@ -355,11 +386,6 @@ export default function Home() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
-  function pushStreamEvent(kind: "tool" | "memory", text: string, detail?: string) {
-    const id = ++streamIdRef.current;
-    setStreamEvents((prev) => [...prev.slice(-5), { id, kind, text, detail }]);
-  }
-
   // ── Send ──
   async function send() {
     const text = input.trim();
@@ -371,8 +397,7 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", content: text, channel: "web", ts: now }]);
     setLoading(true);
     setStatusText("");
-    setStreamEvents([]);
-    setActiveTool(null);
+    setActiveOp(null);
     setAtBottom(true);
 
     const pendingTools: ToolCall[] = [];
@@ -417,15 +442,18 @@ export default function Home() {
               setStatusText(data.text);
             } else if (eventType === "tool") {
               pendingTools.push({ name: data.name });
-              setActiveTool(prettyToolName(data.name));
-              pushStreamEvent("tool", prettyToolName(data.name));
+              setActiveOp({
+                kind: "tool",
+                name: prettyToolName(data.name),
+                detail: describeToolInput(data.name, data.input),
+              });
             } else if (eventType === "memory_hit") {
               pendingHits.push({ path: data.path, heading: data.heading, score: data.score });
-              pushStreamEvent(
-                "memory",
-                stemPath(data.path),
-                `${(data.score as number).toFixed(2)}`,
-              );
+              setActiveOp({
+                kind: "memory",
+                path: stemPath(data.path),
+                score: data.score,
+              });
             } else if (eventType === "usage") {
               pendingUsage = {
                 inputTokens: data.inputTokens,
@@ -469,8 +497,7 @@ export default function Home() {
     } finally {
       setLoading(false);
       setStatusText("");
-      setStreamEvents([]);
-      setActiveTool(null);
+      setActiveOp(null);
       inputRef.current?.focus();
       fetchSnapshot();
     }
@@ -546,10 +573,6 @@ export default function Home() {
         @keyframes dotBounce {
           0%, 100% { opacity: 0.35; transform: translateY(0); }
           50% { opacity: 1; transform: translateY(-2px); }
-        }
-        @keyframes streamIn {
-          from { opacity: 0; transform: translateX(-4px); }
-          to { opacity: 1; transform: translateX(0); }
         }
         @keyframes ringPulse {
           0% { box-shadow: 0 0 0 0 ${themes.dark.accentWashStrong}; }
@@ -809,24 +832,32 @@ export default function Home() {
         /* ── USER MESSAGE ───────────────────────────────────────── */
         .u-wrap {
           display: flex;
-          justify-content: flex-end;
+          flex-direction: column;
+          align-items: flex-end;
           margin: 6px 0 14px;
           animation: fadeRise 0.25s cubic-bezier(0.2,0.7,0.2,1) both;
         }
         .u-msg {
-          max-width: 78%;
-          background: ${t.userBubble};
-          color: ${t.userBubbleText};
+          max-width: min(78%, 640px);
+          background: ${(t as any).userBubble};
+          color: ${(t as any).userBubbleText};
+          border: 1px solid ${(t as any).userBubbleBorder};
           border-radius: 16px 16px 4px 16px;
           padding: 10px 14px;
           font-size: 15px;
           line-height: 1.5;
           white-space: pre-wrap;
           word-wrap: break-word;
+          overflow-wrap: anywhere;
           font-weight: 450;
+          width: fit-content;
+        }
+        .u-msg ::selection {
+          background: ${t.accent};
+          color: ${theme === "dark" ? "#13110d" : "#faf5e8"};
         }
         .u-meta {
-          display: flex; justify-content: flex-end; gap: 6px;
+          display: flex; gap: 6px;
           margin-top: 3px;
           font-family: 'JetBrains Mono', ui-monospace, monospace;
           font-size: 10px;
@@ -1017,26 +1048,29 @@ export default function Home() {
           font-size: 13px;
           line-height: 1;
         }
-
-        .stream-events {
-          margin-top: 8px;
-          display: flex; flex-direction: column; gap: 3px;
+        .running-head .glyph.mem { color: ${t.warn}; }
+        .running-head {
+          max-width: 100%;
+          flex-wrap: wrap;
+        }
+        .running-head .op-name { font-weight: 500; }
+        .running-head .op-detail {
+          color: ${t.textDim};
           font-family: 'JetBrains Mono', ui-monospace, monospace;
           font-size: 11px;
-          color: ${t.textDim};
+          padding-left: 6px;
+          border-left: 1px solid ${t.accentWashStrong};
+          margin-left: 2px;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          min-width: 0;
         }
-        .stream-row {
-          display: flex; align-items: center; gap: 8px;
-          animation: streamIn 0.22s ease-out;
-          padding: 3px 0;
+        .running-head .op-score {
+          color: ${t.textFaint};
+          margin-left: 4px;
         }
-        .stream-row .pip {
-          width: 4px; height: 4px; border-radius: 50%;
-          background: ${t.accent};
-          flex-shrink: 0;
-        }
-        .stream-row.memory .pip { background: ${t.warn}; }
-        .stream-row .detail { color: ${t.textFaint}; margin-left: auto; }
 
         /* ── INPUT DOCK ─────────────────────────────────────────── */
         .dock {
@@ -1565,31 +1599,29 @@ export default function Home() {
               <div className="running">
                 <div className="a-avatar" aria-hidden>{sigilLetter}</div>
                 <div className="running-body">
-                  <div className="running-head">
+                  <div className="running-head" aria-live="polite">
                     <span className="dots"><span /><span /><span /></span>
-                    {activeTool ? (
+                    {activeOp?.kind === "tool" ? (
                       <>
                         <span className="glyph">◆</span>
-                        <span>{activeTool}</span>
+                        <span className="op-name">{activeOp.name}</span>
+                        {activeOp.detail && (
+                          <span className="op-detail">{activeOp.detail}</span>
+                        )}
+                      </>
+                    ) : activeOp?.kind === "memory" ? (
+                      <>
+                        <span className="glyph mem">¶</span>
+                        <span className="op-name">reading</span>
+                        <span className="op-detail">
+                          {activeOp.path}
+                          <span className="op-score">· {activeOp.score.toFixed(2)}</span>
+                        </span>
                       </>
                     ) : (
-                      <span>{statusText || "thinking"}</span>
+                      <span className="op-name">{statusText || "thinking"}</span>
                     )}
                   </div>
-                  {streamEvents.length > 0 && (
-                    <div className="stream-events" aria-live="polite">
-                      {streamEvents.map((e) => (
-                        <div
-                          key={e.id}
-                          className={`stream-row${e.kind === "memory" ? " memory" : ""}`}
-                        >
-                          <span className="pip" />
-                          <span>{e.kind === "memory" ? "read" : "tool"} · {e.text}</span>
-                          {e.detail && <span className="detail">{e.detail}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -1690,15 +1722,13 @@ export default function Home() {
 function UserMsg({ msg }: { msg: Message }) {
   return (
     <div className="u-wrap">
-      <div>
-        <div className="u-msg">{msg.content}</div>
-        {(msg.ts || msg.channel === "telegram") && (
-          <div className="u-meta">
-            {msg.ts && <span>{formatRelativeTime(msg.ts)}</span>}
-            {msg.channel === "telegram" && <span className="tg">◇ telegram</span>}
-          </div>
-        )}
-      </div>
+      <div className="u-msg">{msg.content}</div>
+      {(msg.ts || msg.channel === "telegram") && (
+        <div className="u-meta">
+          {msg.ts && <span>{formatRelativeTime(msg.ts)}</span>}
+          {msg.channel === "telegram" && <span className="tg">◇ telegram</span>}
+        </div>
+      )}
     </div>
   );
 }
