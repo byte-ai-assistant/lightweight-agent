@@ -47,7 +47,14 @@ export function formatRegistryForPrompt(registry: SkillRegistryEntry[]): string 
   const lines = [
     "## Available Skills",
     "",
-    "You have access to these skills. To use one, call load_skill(skillName) first:",
+    "The following skills are registered. If the user's request matches a skill's",
+    "description, you MUST call load_skill(name) BEFORE any other tool call, BEFORE",
+    "using WebSearch/WebFetch, and BEFORE generating task output.",
+    "",
+    "Answering inline when a skill applies bypasses that skill's required gates —",
+    "phase ordering, user approvals, and markdown artifacts on disk. Do not do it.",
+    "\"The skill is overkill\" and \"I already know the answer\" are rationalizations,",
+    "not reasons.",
     "",
   ];
 
@@ -56,10 +63,13 @@ export function formatRegistryForPrompt(registry: SkillRegistryEntry[]): string 
   }
 
   lines.push("");
-  lines.push("To use a skill:");
-  lines.push("1. Call load_skill(\"skillname\")");
-  lines.push("2. Read the returned instructions");
-  lines.push("3. Follow them");
+  lines.push("Workflow for any user message:");
+  lines.push("1. Read the message.");
+  lines.push("2. If it matches a skill's description, call load_skill(that_skill).");
+  lines.push("3. Follow the returned instructions exactly — including any artifact-on-disk step.");
+  lines.push("4. Only then produce user-facing output.");
+  lines.push("");
+  lines.push("If no skill matches, proceed normally.");
   lines.push("");
 
   return lines.join("\n");
