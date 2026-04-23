@@ -5,6 +5,7 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { FullSkill } from "../types.js";
+import { ROOT } from "../../../paths.js";
 
 /**
  * Global skill cache (initialized by agent)
@@ -78,14 +79,15 @@ export const loadSkillTool = tool(
       };
     }
 
-    // Replace {baseDir} with actual skill directory path
+    // Replace {baseDir} with actual skill directory path and {root} with the
+    // agent's working directory, so skills can express absolute paths that
+    // match the agent's cwd pinning (src/agent/index.ts: Options.cwd = ROOT).
     const baseDir = skill.filePath
       ? skill.filePath.replace(/\/SKILL\.md$/, "")
       : "";
-    const resolvedContent = skill.content.replace(
-      /\{baseDir\}/g,
-      baseDir
-    );
+    const resolvedContent = skill.content
+      .replace(/\{baseDir\}/g, baseDir)
+      .replace(/\{root\}/g, ROOT);
 
     // Return full skill content (without frontmatter)
     return {

@@ -10,6 +10,10 @@ metadata:
 
 # Quant Research
 
+## Working directory
+
+The agent's pinned working directory is `{root}`. Quant artifacts live under `{root}/docs/quant/<topic-slug>/`, one directory per research topic. Write the research doc into that topic's `research/` subfolder — never to a flat shared folder.
+
 ## The Rule
 
 ```
@@ -91,7 +95,7 @@ No gaps found = you did not look hard enough. Go back to step 2.
 
 ## Output
 
-Write to `docs/quant/research/YYYY-MM-DD-<topic-slug>.md` with this structure:
+Write to `{root}/docs/quant/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md` with this structure:
 
 ```markdown
 # Research: <topic>

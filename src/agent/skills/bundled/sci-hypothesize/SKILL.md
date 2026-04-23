@@ -5,6 +5,10 @@ description: Use after sci-graphify completes — turns research findings and gr
 
 # Sci Hypothesize
 
+## Working directory
+
+The agent's pinned working directory is `{root}`. Scientific artifacts live under `{root}/docs/sci/<topic-slug>/`, one directory per research project. Write the hypothesis doc into that project's `hypotheses/` subfolder — never to a flat shared folder outside the project directory.
+
 ## The Rule
 
 ```
@@ -19,9 +23,9 @@ That one has: a signal (Shannon index), a prediction (PHQ-9 change), a sign (neg
 
 ## Inputs
 
-- The research doc: `docs/sci/research/YYYY-MM-DD-<topic>.md`.
-- The graph reading doc: `docs/sci/graphs/YYYY-MM-DD-<topic>.md`.
-- The graph JSON: `docs/sci/graphs/<topic-slug>/graphify-out/graph.json` (to cite node labels).
+- The research doc: `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md`.
+- The graph reading doc: `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md`.
+- The graph JSON: `{root}/docs/sci/<topic-slug>/graphs/graphify-out/graph.json` (to cite node labels).
 - The user-selected target (god node or surprising connection).
 
 If the user hasn't selected a target, ask before proceeding. Hypothesizing blind to the graph's signal produces the same incrementalist hypotheses the literature already has.
@@ -123,14 +127,14 @@ Example:
 
 ## Output
 
-Write to `docs/sci/hypotheses/YYYY-MM-DD-<name-slug>.md`:
+Write to `{root}/docs/sci/<topic-slug>/hypotheses/YYYY-MM-DD-<name-slug>.md`:
 
 ```markdown
 # Hypothesis: <short name>
 
 **Date:** YYYY-MM-DD
-**Upstream research:** docs/sci/research/YYYY-MM-DD-<topic>.md
-**Upstream graph reading:** docs/sci/graphs/YYYY-MM-DD-<topic>.md
+**Upstream research:** docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md
+**Upstream graph reading:** docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md
 **Graph target:** <node label> [community <N>: <label>]
 **Claim type:** causal | correlational
 

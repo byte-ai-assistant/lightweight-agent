@@ -5,6 +5,10 @@ description: Use after sci-research completes and before sci-hypothesize — bui
 
 # Sci Graphify
 
+## Working directory
+
+The agent's pinned working directory is `{root}`. Scientific artifacts live under `{root}/docs/sci/<topic-slug>/`. Graphify output for this project lives at `{root}/docs/sci/<topic-slug>/graphs/graphify-out/`. Bash commands in this skill assume the agent is operating from `{root}` unless `cd`'d explicitly.
+
 ## The Rule
 
 ```
@@ -14,9 +18,9 @@ GRAPH THE CORPUS. READ THE REPORT. NAME THE BRIDGES. THEN HYPOTHESIZE.
 In scientific work, the most generative hypotheses come from *cross-community bridges* — a method from one subfield that applies unexpectedly in another, a mechanism observed in one organism replicated in a related one, a variable that appears in two literatures under different names. These bridges are not visible in a paragraph-by-paragraph reading of a research doc. They become visible only when the corpus is laid out as a graph and communities are identified.
 
 This phase does three things:
-1. Turns the raw-materials folder (`docs/sci/raw/<topic>/`) into a knowledge graph using `graphify`.
+1. Turns the raw-materials folder (`{root}/docs/sci/<topic-slug>/raw/`) into a knowledge graph using `graphify`.
 2. Reads `GRAPH_REPORT.md` and annotates it: what are the god nodes, what do the communities correspond to, which cross-community connections are *interesting*.
-3. Writes the annotated reading to `docs/sci/graphs/YYYY-MM-DD-<topic>.md` — this is the input the hypothesis phase uses to choose targets.
+3. Writes the annotated reading to `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md` — this is the input the hypothesis phase uses to choose targets.
 
 ## Prerequisites
 
@@ -31,9 +35,9 @@ If the install fails, stop and ask the user to install graphify themselves. Do n
 
 ## Inputs
 
-- The research doc from `sci-research`: `docs/sci/research/YYYY-MM-DD-<topic>.md`.
-- The raw-materials folder: `docs/sci/raw/<topic-slug>/` (must contain ≥ 5 markdown files).
-- The topic slug (used as the subfolder for graphify output).
+- The research doc from `sci-research`: `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md`.
+- The raw-materials folder: `{root}/docs/sci/<topic-slug>/raw/` (must contain ≥ 5 markdown files).
+- The topic slug (the project directory name under `{root}/docs/sci/`).
 
 If the raw-materials folder does not exist or has fewer than 5 files, STOP. Drop back to `sci-research` and have the user add more sources. A sparse corpus produces a sparse graph, which produces no usable communities.
 
@@ -42,7 +46,7 @@ If the raw-materials folder does not exist or has fewer than 5 files, STOP. Drop
 Before graphing, quickly read the raw-materials folder to make sure it looks right:
 
 ```bash
-ls -la docs/sci/raw/<topic-slug>/
+ls -la {root}/docs/sci/<topic-slug>/raw/
 ```
 
 Confirm:
@@ -54,18 +58,19 @@ If the mix is wrong, return to `sci-research`. Do not patch the gaps silently �
 
 ## Build the Graph
 
-Create a dedicated output folder under `docs/sci/graphs/<topic-slug>/` so the graph artifacts are separated from the annotated reading doc.
+The graphify artifacts go inside the project's `graphs/graphify-out/` folder, alongside the annotated reading doc in `graphs/`.
 
 ```bash
-mkdir -p docs/sci/graphs/<topic-slug>
-cd docs/sci/graphs/<topic-slug>
+mkdir -p {root}/docs/sci/<topic-slug>/graphs/graphify-out
+cd {root}/docs/sci/<topic-slug>/graphs
 ```
+
+All subsequent commands assume `cwd = {root}/docs/sci/<topic-slug>/graphs/`. Raw materials for this project are at `../raw/` (one level up from this graphs folder).
 
 Write the Python interpreter path once, then reuse it:
 
 ```bash
 python3 -c "import sys; open('.graphify_python', 'w').write(sys.executable)"
-mkdir -p graphify-out
 python3 -c "import sys; open('graphify-out/.graphify_python', 'w').write(sys.executable)"
 ```
 
@@ -76,7 +81,7 @@ $(cat graphify-out/.graphify_python) -c "
 import json
 from graphify.detect import detect
 from pathlib import Path
-result = detect(Path('../../raw/<topic-slug>'))
+result = detect(Path('../raw'))
 Path('graphify-out/.graphify_detect.json').write_text(json.dumps(result))
 print(f'Corpus: {result.get(\"total_files\",0)} files, ~{result.get(\"total_words\",0):,} words')
 for ftype in ['code','document','paper','image','video']:
@@ -86,7 +91,7 @@ for ftype in ['code','document','paper','image','video']:
 "
 ```
 
-Replace `<topic-slug>` with the actual slug.
+The relative path `../raw` resolves to `{root}/docs/sci/<topic-slug>/raw/` given the `cd` above.
 
 If `total_files == 0` or `total_words < 1000`, stop. The graph will not produce meaningful communities. Return to `sci-research`.
 
@@ -127,11 +132,11 @@ Write the combined result to `graphify-out/.graphify_semantic.json`:
 ```json
 {
   "nodes": [
-    {"id":"smith2022_microbiome_alpha_diversity","label":"Microbiome alpha-diversity","file_type":"document","source_file":"../../raw/<topic-slug>/smith-2022.md"},
-    {"id":"smith2022_phq9","label":"PHQ-9","file_type":"document","source_file":"../../raw/<topic-slug>/smith-2022.md"}
+    {"id":"smith2022_microbiome_alpha_diversity","label":"Microbiome alpha-diversity","file_type":"document","source_file":"../raw/smith-2022.md"},
+    {"id":"smith2022_phq9","label":"PHQ-9","file_type":"document","source_file":"../raw/smith-2022.md"}
   ],
   "edges": [
-    {"source":"smith2022_microbiome_alpha_diversity","target":"smith2022_phq9","relation":"conceptually_related_to","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"../../raw/<topic-slug>/smith-2022.md","weight":1.0}
+    {"source":"smith2022_microbiome_alpha_diversity","target":"smith2022_phq9","relation":"conceptually_related_to","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"../raw/smith-2022.md","weight":1.0}
   ],
   "hyperedges": [],
   "input_tokens": 0,
@@ -196,7 +201,7 @@ surprises = surprising_connections(G, communities)
 labels = {cid: 'Community ' + str(cid) for cid in communities}
 questions = suggest_questions(G, communities, labels)
 
-report = generate(G, communities, cohesion, labels, gods, surprises, detection, tokens, '../../raw/<topic-slug>', suggested_questions=questions)
+report = generate(G, communities, cohesion, labels, gods, surprises, detection, tokens, '../raw', suggested_questions=questions)
 Path('graphify-out/GRAPH_REPORT.md').write_text(report)
 to_json(G, communities, 'graphify-out/graph.json')
 analysis = {
@@ -240,7 +245,7 @@ tokens = {'input': extraction.get('input_tokens',0), 'output': extraction.get('o
 labels = LABELS_DICT  # replace with the dict you built
 
 questions = suggest_questions(G, communities, labels)
-report = generate(G, communities, cohesion, labels, analysis['gods'], analysis['surprises'], detection, tokens, '../../raw/<topic-slug>', suggested_questions=questions)
+report = generate(G, communities, cohesion, labels, analysis['gods'], analysis['surprises'], detection, tokens, '../raw', suggested_questions=questions)
 Path('graphify-out/GRAPH_REPORT.md').write_text(report)
 Path('graphify-out/.graphify_labels.json').write_text(json.dumps({str(k): v for k, v in labels.items()}))
 print('Report updated with community labels')
@@ -276,7 +281,7 @@ else:
 rm -f graphify-out/.graphify_detect.json graphify-out/.graphify_extract.json graphify-out/.graphify_ast.json graphify-out/.graphify_semantic.json graphify-out/.graphify_analysis.json graphify-out/.graphify_labels.json
 ```
 
-Keep `graphify-out/graph.json`, `graphify-out/GRAPH_REPORT.md`, and `graphify-out/graph.html` — these are the artefacts. Return to the repo root.
+Keep `graphify-out/graph.json`, `graphify-out/GRAPH_REPORT.md`, and `graphify-out/graph.html` — these are the artefacts. Return to the repo root (`cd {root}`).
 
 ## Read the Report — the Real Work
 
@@ -315,15 +320,15 @@ Enumerate the 3–5 most promising surprising connections explicitly. For each, 
 
 ## Output
 
-Write `docs/sci/graphs/YYYY-MM-DD-<topic-slug>.md`:
+Write `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md`:
 
 ```markdown
 # Graph Reading: <topic>
 
 **Date:** YYYY-MM-DD
-**Upstream research:** docs/sci/research/YYYY-MM-DD-<topic-slug>.md
-**Corpus:** docs/sci/raw/<topic-slug>/ (<N> files, ~<W> words)
-**Graph artifacts:** docs/sci/graphs/<topic-slug>/graphify-out/
+**Upstream research:** docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md
+**Corpus:** docs/sci/<topic-slug>/raw/ (<N> files, ~<W> words)
+**Graph artifacts:** docs/sci/<topic-slug>/graphs/graphify-out/
 
 ## Graph shape
 

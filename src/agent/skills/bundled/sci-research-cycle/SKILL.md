@@ -10,17 +10,23 @@ metadata:
 
 # Sci Research Cycle — Orchestrator
 
+## Working directory
+
+The agent's pinned working directory is `{root}`. All paths below that begin with `docs/` are relative to that root — i.e. `docs/sci/foo/` means `{root}/docs/sci/foo/`. Do not write scientific artifacts outside `{root}/docs/sci/`.
+
 ## Overview
 
 This skill chains the three scientific phases in order. Each phase produces a markdown artifact that the next phase consumes. The terminal output is a falsifiable hypothesis doc.
 
+**Every research project lives in its own top-level directory under `{root}/docs/sci/<topic-slug>/`** with four sub-folders: `raw/`, `research/`, `graphs/`, `hypotheses/`. Do not scatter artifacts across flat shared folders.
+
 ```
 research question
-   → [sci-research]    → docs/sci/research/<date>-<topic>.md
-                       + docs/sci/raw/<topic>/  (raw materials for the graph)
-   → [sci-graphify]    → docs/sci/graphs/<date>-<topic>.md
-                       + docs/sci/graphs/<topic>/graphify-out/  (graph.json, GRAPH_REPORT.md, graph.html)
-   → [sci-hypothesize] → docs/sci/hypotheses/<date>-<name>.md  ← terminal doc
+   → [sci-research]    → {root}/docs/sci/<topic-slug>/research/<date>-<topic-slug>.md
+                       + {root}/docs/sci/<topic-slug>/raw/  (raw materials for the graph)
+   → [sci-graphify]    → {root}/docs/sci/<topic-slug>/graphs/<date>-<topic-slug>.md
+                       + {root}/docs/sci/<topic-slug>/graphs/graphify-out/  (graph.json, GRAPH_REPORT.md, graph.html)
+   → [sci-hypothesize] → {root}/docs/sci/<topic-slug>/hypotheses/<date>-<name-slug>.md  ← terminal doc
    → "Hand off to experimental design or a human."
 ```
 
@@ -37,16 +43,22 @@ In quant work, the gap section of a research doc is enough to seed hypotheses. I
   python3 -m pip install graphifyy -q
   ```
   Wait for the user to install before continuing.
-- `docs/sci/{research,raw,graphs,hypotheses}/` exist (create if not).
+- `{root}/docs/sci/<topic-slug>/{research,raw,graphs,hypotheses}/` exist (create if not — `mkdir -p {root}/docs/sci/<topic-slug>/{research,raw,graphs,hypotheses}`).
 
 ## Resume Logic
 
-Before starting Phase 1, detect the highest-complete artifact for this topic. Ask the user whether to resume or start fresh.
+Before starting Phase 1, list existing research projects and their highest-complete artifact. Ask the user whether to resume one or start fresh.
 
 ```bash
-ls -t docs/sci/hypotheses/ 2>/dev/null | head -5
-ls -t docs/sci/graphs/     2>/dev/null | head -5
-ls -t docs/sci/research/   2>/dev/null | head -5
+# List every existing research project and whether each phase is complete.
+for d in {root}/docs/sci/*/; do
+  slug=$(basename "$d")
+  [ "$slug" = ".venv" ] && continue
+  research=$(ls "$d/research" 2>/dev/null | head -1)
+  graph=$(ls "$d/graphs" 2>/dev/null | grep -E '\.md$' | head -1)
+  hyp=$(ls "$d/hypotheses" 2>/dev/null | grep -E '\.md$' | head -1)
+  echo "$slug | research:${research:-—} | graph:${graph:-—} | hypothesis:${hyp:-—}"
+done
 ```
 
 If the user confirms resume, jump to the next incomplete phase. Do not re-run completed phases without explicit confirmation — overwriting a research doc loses the gap list that fed the graph and the hypotheses.
@@ -59,17 +71,17 @@ Load skill: `sci-research`
 
 - Input: the user's research question.
 - Run the structured literature + dataset + replication survey.
-- Save raw materials (abstracts, key passages, dataset cards, methodology notes) to `docs/sci/raw/<topic-slug>/` — these are the corpus the next phase will graph.
-- Output: `docs/sci/research/YYYY-MM-DD-<topic>.md`.
-- **Gate:** research doc written on disk with at least one *Gaps* entry AND `docs/sci/raw/<topic-slug>/` populated with at least 5 source files. Show the user the findings and ask: *"Shall we proceed to graph synthesis, or do you want me to dig deeper on any subdomain first?"* Wait for explicit go-ahead.
+- Save raw materials (abstracts, key passages, dataset cards, methodology notes) to `{root}/docs/sci/<topic-slug>/raw/` — these are the corpus the next phase will graph.
+- Output: `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md`.
+- **Gate:** research doc written on disk with at least one *Gaps* entry AND `{root}/docs/sci/<topic-slug>/raw/` populated with at least 5 source files. Show the user the findings and ask: *"Shall we proceed to graph synthesis, or do you want me to dig deeper on any subdomain first?"* Wait for explicit go-ahead.
 
 ## Phase 2 — Graphify
 
 Load skill: `sci-graphify`
 
-- Input: the raw materials in `docs/sci/raw/<topic-slug>/`.
+- Input: the raw materials in `{root}/docs/sci/<topic-slug>/raw/`.
 - Build the knowledge graph using graphify, label communities, identify god nodes, enumerate surprising cross-community connections.
-- Output: `docs/sci/graphs/YYYY-MM-DD-<topic>.md` (annotated reading) + `docs/sci/graphs/<topic>/graphify-out/` (graphify artifacts).
+- Output: `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md` (annotated reading) + `{root}/docs/sci/<topic-slug>/graphs/graphify-out/` (graphify artifacts).
 - **Gate:** graph reading doc written with at least 3 *interesting connections* explicitly enumerated. Show the user the god nodes, communities, and surprising connections. Ask: *"Which connection (or god node) should I aim a hypothesis at?"* Wait for an explicit selection.
 
 ## Phase 3 — Hypothesize
@@ -78,7 +90,7 @@ Load skill: `sci-hypothesize`
 
 - Input: the research doc, the graph reading doc, and the user-selected target (god node or surprising connection).
 - Construct one or more falsifiable hypotheses; run the anti-pattern checklist; pre-specify the kill criteria.
-- Output: `docs/sci/hypotheses/YYYY-MM-DD-<name>.md`.
+- Output: `{root}/docs/sci/<topic-slug>/hypotheses/YYYY-MM-DD-<name-slug>.md`.
 - **Gate:** hypothesis doc written, anti-pattern checklist passed (no unfalsifiable claims, no pattern-without-mechanism, no missing kill criteria). Print the terminal message and stop.
 
 ## Terminal State
@@ -86,7 +98,7 @@ Load skill: `sci-hypothesize`
 After Phase 3, print exactly:
 
 ```
-HYPOTHESIS COMPLETE. docs/sci/hypotheses/<file>.md is ready.
+HYPOTHESIS COMPLETE. {root}/docs/sci/<topic-slug>/hypotheses/<file>.md is ready.
 
 The hypothesis spec includes:
  - Falsifiable claim (signal, prediction, sign, effect size, universe, horizon)

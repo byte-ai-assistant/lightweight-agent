@@ -1,6 +1,6 @@
 ---
 name: sci-research
-description: Use when starting a fresh scientific research question, before any hypothesis — surveys peer-reviewed literature, datasets, replication evidence, and methodological debates to build a sourced foundation with an explicit gap list. Saves raw materials to docs/sci/raw/<topic>/ for the graph phase to ingest.
+description: Use when starting a fresh scientific research question, before any hypothesis — surveys peer-reviewed literature, datasets, replication evidence, and methodological debates to build a sourced foundation with an explicit gap list. Saves raw materials to docs/sci/<topic-slug>/raw/ for the graph phase to ingest.
 metadata:
   openclaw:
     requires:
@@ -9,6 +9,10 @@ metadata:
 ---
 
 # Sci Research
+
+## Working directory
+
+The agent's pinned working directory is `{root}`. Scientific artifacts live under `{root}/docs/sci/<topic-slug>/`, one directory per research project. Do not write research outputs outside this tree.
 
 ## The Rule
 
@@ -65,15 +69,15 @@ What mechanisms have been proposed for the underlying phenomenon? Where does the
 
 ### 5. Save Raw Materials to Disk
 
-For every source you cite, save a text-format artifact to `docs/sci/raw/<topic-slug>/`. The graph phase needs this corpus.
+For every source you cite, save a text-format artifact to `{root}/docs/sci/<topic-slug>/raw/`. The graph phase needs this corpus.
 
 ```bash
-mkdir -p docs/sci/raw/<topic-slug>
+mkdir -p {root}/docs/sci/<topic-slug>/{raw,research,graphs,hypotheses}
 ```
 
 Per source, write one of:
 
-- **Abstract + key passages** as a markdown file: `docs/sci/raw/<topic-slug>/<short-id>.md` with frontmatter:
+- **Abstract + key passages** as a markdown file: `{root}/docs/sci/<topic-slug>/raw/<short-id>.md` with frontmatter:
   ```markdown
   ---
   source_url: https://...
@@ -92,7 +96,7 @@ Per source, write one of:
   ```
 - **Dataset cards** as markdown files describing what the dataset measures, who collected it, known biases.
 - **Method notes** as markdown files describing a methodology, its assumptions, and its known failure modes.
-- **PDFs** can be saved alongside (`docs/sci/raw/<topic-slug>/<short-id>.pdf`) but are optional — the markdown abstract is what graphify will primarily ingest.
+- **PDFs** can be saved alongside (`{root}/docs/sci/<topic-slug>/raw/<short-id>.pdf`) but are optional — the markdown abstract is what graphify will primarily ingest.
 
 If `web_search_exa` returns full content, save the relevant excerpt — do not just save the URL. The graph cannot be built from URLs alone.
 
@@ -128,7 +132,7 @@ No gaps found = you did not look hard enough. Go back to step 2.
 
 ## Output
 
-Write to `docs/sci/research/YYYY-MM-DD-<topic-slug>.md` with this structure:
+Write to `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md` with this structure:
 
 ```markdown
 # Research: <topic>
@@ -166,7 +170,7 @@ Write to `docs/sci/research/YYYY-MM-DD-<topic-slug>.md` with this structure:
 
 ## Raw materials saved
 
-Files in `docs/sci/raw/<topic-slug>/`:
+Files in `{root}/docs/sci/<topic-slug>/raw/`:
 - `smith-2022.md` — Smith et al. 2022 Nature, abstract + Fig. 3 caption
 - `jones-2023-replication.md` — Jones 2023 replication report
 - `<dataset-name>.md` — dataset card
@@ -228,9 +232,9 @@ Writing *"X causes Y"* in a finding row when the cited study only showed *"X is 
 - Paper title, authors, year, venue, DOI/URL.
 - For preprints: server, post date, version number.
 - For datasets: name, version, accession ID, governance body.
-- For local files: full path under `docs/sci/raw/`.
+- For local files: full path under `{root}/docs/sci/<topic-slug>/raw/`.
 - No "various sources" or "consensus opinion". Every claim has a cite or is flagged as *unverified*.
 
 ## Handoff
 
-When the output doc is complete AND `docs/sci/raw/<topic-slug>/` has at least 5 files, the cycle proceeds to `sci-graphify`. The raw-materials folder is the input the graph phase ingests; the gap section is what the hypothesis phase will eventually exploit. Both must be in good shape before handoff.
+When the output doc is complete AND `{root}/docs/sci/<topic-slug>/raw/` has at least 5 files, the cycle proceeds to `sci-graphify`. The raw-materials folder is the input the graph phase ingests; the gap section is what the hypothesis phase will eventually exploit. Both must be in good shape before handoff.

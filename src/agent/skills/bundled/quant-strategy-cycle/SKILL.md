@@ -5,15 +5,21 @@ description: Use when running a full quant-research cycle from a fresh research 
 
 # Quant Strategy Cycle — Orchestrator
 
+## Working directory
+
+The agent's pinned working directory is `{root}`. All quant artifacts live under `{root}/docs/quant/<topic-slug>/`, one directory per research topic. Do not write quant outputs outside this tree.
+
 ## Overview
 
 This skill chains the three v1 quant phases in order. Each phase produces a markdown artifact that the next phase consumes. The terminal output is a strategy-spec doc the user hands to `eng-epic-cycle`.
 
+**Every quant research topic lives in its own top-level directory under `{root}/docs/quant/<topic-slug>/`** with three sub-folders: `research/`, `hypotheses/`, `strategies/`. Do not scatter artifacts across flat shared folders.
+
 ```
 research question
-   → [quant-research]   → docs/quant/research/<date>-<topic>.md
-   → [quant-hypothesize] → docs/quant/hypotheses/<date>-<name>.md
-   → [quant-strategy-design] → docs/quant/strategies/<date>-<name>.md  ← hand-off doc
+   → [quant-research]        → {root}/docs/quant/<topic-slug>/research/<date>-<topic-slug>.md
+   → [quant-hypothesize]     → {root}/docs/quant/<topic-slug>/hypotheses/<date>-<name-slug>.md
+   → [quant-strategy-design] → {root}/docs/quant/<topic-slug>/strategies/<date>-<name-slug>.md  ← hand-off doc
    → "Run /eng-epic-cycle with that strategy doc"
 ```
 
@@ -21,16 +27,20 @@ research question
 
 - User has supplied a research question or topic (or you are resuming an in-flight chain).
 - `EXA_API_KEY` is set (research phase depends on it).
-- `docs/quant/{research,hypotheses,strategies}/` directories exist (create if not).
+- `{root}/docs/quant/<topic-slug>/{research,hypotheses,strategies}/` directories exist (create with `mkdir -p {root}/docs/quant/<topic-slug>/{research,hypotheses,strategies}`).
 
 ## Resume Logic
 
-Before starting Phase 1, detect the highest-complete artifact for this topic. Ask the user if you should resume from there or start fresh.
+Before starting Phase 1, list existing quant topics and the highest-complete artifact in each. Ask the user whether to resume one or start fresh.
 
 ```bash
-ls -t docs/quant/strategies/ 2>/dev/null | head -5
-ls -t docs/quant/hypotheses/ 2>/dev/null | head -5
-ls -t docs/quant/research/   2>/dev/null | head -5
+for d in {root}/docs/quant/*/; do
+  slug=$(basename "$d")
+  research=$(ls "$d/research" 2>/dev/null | head -1)
+  hyp=$(ls "$d/hypotheses" 2>/dev/null | head -1)
+  strat=$(ls "$d/strategies" 2>/dev/null | head -1)
+  echo "$slug | research:${research:-—} | hypothesis:${hyp:-—} | strategy:${strat:-—}"
+done
 ```
 
 If the user confirms resume, jump to the next incomplete phase.
@@ -43,7 +53,7 @@ Load skill: `quant-research`
 
 - Input: the user's research question.
 - Run the structured literature + market-structure survey.
-- Output: `docs/quant/research/YYYY-MM-DD-<topic>.md`.
+- Output: `{root}/docs/quant/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md`.
 - **Gate:** research doc written on disk with at least one *Gaps* entry. Show the user the findings and ask: *"Shall we proceed to hypothesizing, or do you want me to dig deeper on any gap first?"* Wait for explicit go-ahead.
 
 ## Phase 2 — Hypothesize
@@ -52,7 +62,7 @@ Load skill: `quant-hypothesize`
 
 - Input: the research doc from Phase 1 + the user's intuition/preferred angle.
 - Construct one or more falsifiable hypotheses; run the anti-pattern checklist.
-- Output: `docs/quant/hypotheses/YYYY-MM-DD-<name>.md`.
+- Output: `{root}/docs/quant/<topic-slug>/hypotheses/YYYY-MM-DD-<name-slug>.md`.
 - **Gate:** hypothesis doc written, anti-pattern checklist passed (no unfalsifiable claims, no look-ahead, no missing mechanism). Ask the user: *"Which hypothesis should we spec out?"* Wait for an explicit selection.
 
 ## Phase 3 — Strategy Design
@@ -61,7 +71,7 @@ Load skill: `quant-strategy-design`
 
 - Input: the chosen hypothesis from Phase 2.
 - Produce a full implementable strategy spec using the STRATEGY OUTPUT FORMAT from `base-context.qmd`.
-- Output: `docs/quant/strategies/YYYY-MM-DD-<name>.md` — **THE HAND-OFF DOC**.
+- Output: `{root}/docs/quant/<topic-slug>/strategies/YYYY-MM-DD-<name-slug>.md` — **THE HAND-OFF DOC**.
 - **Gate:** strategy doc written with every required section populated (no TBD / TODO). The *Invariants* and *Acceptance Criteria* sections must be numeric and specific, not hand-wavy.
 
 ## Terminal State
@@ -69,7 +79,7 @@ Load skill: `quant-strategy-design`
 After Phase 3, print exactly:
 
 ```
-READY FOR ENGINEERING. Run /eng-epic-cycle with docs/quant/strategies/<file>.md as input.
+READY FOR ENGINEERING. Run /eng-epic-cycle with {root}/docs/quant/<topic-slug>/strategies/<file>.md as input.
 
 The strategy spec includes:
  - Signal definition, universe, entry/exit rules, position sizing, risk limits

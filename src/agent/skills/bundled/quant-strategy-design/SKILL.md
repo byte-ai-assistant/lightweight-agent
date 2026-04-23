@@ -5,6 +5,10 @@ description: Use after quant-hypothesize when a hypothesis has been selected —
 
 # Quant Strategy Design
 
+## Working directory
+
+The agent's pinned working directory is `{root}`. Quant artifacts live under `{root}/docs/quant/<topic-slug>/`, one directory per research topic. Write the strategy doc into that topic's `strategies/` subfolder — never to a flat shared folder.
+
 ## The Rule
 
 ```
@@ -123,7 +127,7 @@ Numeric bars that make this live-worthy. These are commitments — do not revise
 
 ## Output
 
-Write to `docs/quant/strategies/YYYY-MM-DD-<name-slug>.md`. This is the hand-off doc. Every section above becomes a section in the doc. Use the STRATEGY OUTPUT FORMAT fields from `base-context.qmd` as the spine:
+Write to `{root}/docs/quant/<topic-slug>/strategies/YYYY-MM-DD-<name-slug>.md`. This is the hand-off doc. Every section above becomes a section in the doc. Use the STRATEGY OUTPUT FORMAT fields from `base-context.qmd` as the spine:
 
 > *Hypothesis · Entry rule · Universe filter · Token direction · Position sizing · Exit conditions · Fee and slippage model · Backtest results (to be filled by engineer) · Out-of-sample validation · Fill rate and capital utilization · Regime dependency · Known failure modes*
 
@@ -133,8 +137,8 @@ Include at the top:
 # Strategy: <name>
 
 **Date:** YYYY-MM-DD
-**Upstream hypothesis:** docs/quant/hypotheses/<file>.md
-**Upstream research:** docs/quant/research/<file>.md
+**Upstream hypothesis:** docs/quant/<topic-slug>/hypotheses/<file>.md
+**Upstream research:** docs/quant/<topic-slug>/research/<file>.md
 **Status:** SPEC COMPLETE — READY FOR ENG
 
 ## Summary (1 paragraph)

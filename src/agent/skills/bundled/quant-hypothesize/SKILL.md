@@ -5,6 +5,10 @@ description: Use after quant-research completes, before any strategy design — 
 
 # Quant Hypothesize
 
+## Working directory
+
+The agent's pinned working directory is `{root}`. Quant artifacts live under `{root}/docs/quant/<topic-slug>/`, one directory per research topic. Write the hypothesis doc into that topic's `hypotheses/` subfolder — never to a flat shared folder.
+
 ## The Rule
 
 ```
@@ -99,13 +103,13 @@ If the numeric prediction in §3 does not survive this cost check, **kill the hy
 
 ## Output
 
-Write to `docs/quant/hypotheses/YYYY-MM-DD-<name-slug>.md`:
+Write to `{root}/docs/quant/<topic-slug>/hypotheses/YYYY-MM-DD-<name-slug>.md`:
 
 ```markdown
 # Hypothesis: <short name>
 
 **Date:** YYYY-MM-DD
-**Upstream research:** docs/quant/research/<file>.md
+**Upstream research:** docs/quant/<topic-slug>/research/<file>.md
 
 ## Claim (falsifiable)
 
