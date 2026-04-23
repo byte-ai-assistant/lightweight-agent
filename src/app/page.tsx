@@ -1325,17 +1325,32 @@ export default function Home() {
         }
 
         .log-row {
-          display: grid;
-          grid-template-columns: 60px 16px 1fr auto;
-          gap: 10px;
-          padding: 8px 10px;
           border-bottom: 1px solid ${t.border};
           font-family: 'JetBrains Mono', ui-monospace, monospace;
           font-size: 11.5px;
-          align-items: baseline;
         }
         .log-row:last-child { border-bottom: none; }
-        .log-time { color: ${t.textFaint}; font-size: 10.5px; }
+        .log-row.expanded { background: ${t.bgElev}; }
+        .log-row-head {
+          appearance: none;
+          background: transparent;
+          border: none;
+          padding: 8px 10px;
+          width: 100%;
+          text-align: left;
+          cursor: pointer;
+          display: grid;
+          grid-template-columns: 60px 16px 1fr auto 14px;
+          gap: 10px;
+          align-items: baseline;
+          font: inherit;
+          color: inherit;
+          transition: background 0.12s ease;
+        }
+        .log-row-head:hover:not(:disabled) { background: ${t.surfaceHover}; }
+        .log-row-head:disabled { cursor: default; }
+        .log-row-head:disabled .log-chev { visibility: hidden; }
+        .log-time { color: ${t.textFaint}; font-size: 10.5px; white-space: nowrap; }
         .log-glyph {
           font-family: 'Fraunces', serif;
           font-size: 13px;
@@ -1347,13 +1362,49 @@ export default function Home() {
         .log-glyph.skip { color: ${t.ghost}; }
         .log-glyph.error { color: ${t.danger}; }
         .log-glyph.usage { color: ${t.textFaint}; }
-        .log-text { color: ${t.text}; word-break: break-word; }
-        .log-sub { color: ${t.textDim}; font-size: 10.5px; }
+        .log-text {
+          color: ${t.text};
+          word-break: break-word;
+          overflow-wrap: anywhere;
+          min-width: 0;
+        }
+        .log-text .log-name { font-weight: 500; }
+        .log-text .log-detail {
+          color: ${t.textDim};
+          margin-left: 8px;
+          padding-left: 8px;
+          border-left: 1px solid ${t.border};
+        }
+        .log-sub {
+          color: ${t.textDim};
+          font-size: 10.5px;
+          margin-top: 2px;
+        }
         .log-channel {
           font-size: 10px;
           color: ${t.textFaint};
           letter-spacing: 0.06em;
           text-transform: uppercase;
+          white-space: nowrap;
+        }
+        .log-chev {
+          color: ${t.textFaint};
+          font-size: 10px;
+          justify-self: end;
+        }
+        .log-payload {
+          margin: 0;
+          padding: 10px 14px 14px 60px;
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-size: 11px;
+          line-height: 1.45;
+          color: ${t.textDim};
+          background: ${t.bg};
+          border-top: 1px dashed ${t.border};
+          white-space: pre-wrap;
+          word-break: break-all;
+          max-height: 360px;
+          overflow-y: auto;
         }
         .log-empty {
           padding: 30px 10px;
@@ -2035,7 +2086,16 @@ function LogsDrawer({
   );
 }
 
+function safeJsonStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 function LogRow({ event }: { event: LogEvent }) {
+  const [expanded, setExpanded] = useState(false);
   const channel = friendlyChannel(event.userId);
 
   let glyph = "◆";
@@ -2046,49 +2106,96 @@ function LogRow({ event }: { event: LogEvent }) {
   if (event.kind === "tool") {
     glyph = "◆";
     const name = event.payload.name as string | undefined;
-    text = <span>{prettyToolName(name ?? "tool")}</span>;
+    const input = event.payload.input;
+    const detail = name ? describeToolInput(name, input) : undefined;
+    text = (
+      <span>
+        <span className="log-name">{prettyToolName(name ?? "tool")}</span>
+        {detail && <span className="log-detail">{detail}</span>}
+      </span>
+    );
   } else if (event.kind === "memory") {
     glyph = "¶";
     glyphClass = "memory";
     const p = event.payload.path as string;
+    const heading = event.payload.heading as string | undefined;
     const s = event.payload.score as number;
-    text = <span>{stemPath(p)}</span>;
+    text = (
+      <span>
+        <span className="log-name">{stemPath(p)}</span>
+        {heading && heading !== "(intro)" && (
+          <span className="log-detail">› {heading}</span>
+        )}
+      </span>
+    );
     sub = `score ${s.toFixed(2)}`;
   } else if (event.kind === "cron_fire") {
     glyph = "▲";
     glyphClass = "cron";
-    text = <span>{(event.payload.description as string) ?? "cron"}</span>;
+    text = <span className="log-name">{(event.payload.description as string) ?? "cron"}</span>;
     sub = (event.payload.schedule as string) ?? "";
   } else if (event.kind === "cron_skip") {
     glyph = "▽";
     glyphClass = "skip";
-    text = <span>skip: {(event.payload.description as string) ?? "cron"}</span>;
+    text = <span className="log-name">skip: {(event.payload.description as string) ?? "cron"}</span>;
     sub = (event.payload.reason as string) ?? "";
   } else if (event.kind === "usage") {
     glyph = "$";
     glyphClass = "usage";
     const it = event.payload.inputTokens as number;
     const ot = event.payload.outputTokens as number;
+    const cr = event.payload.cacheReadTokens as number | undefined;
     const cost = event.payload.costUsd as number;
-    text = <span>{formatTokens(it + ot)} tokens</span>;
+    text = (
+      <span>
+        <span className="log-name">{formatTokens(it + ot)} tokens</span>
+        <span className="log-detail">
+          in {formatTokens(it)} · out {formatTokens(ot)}
+          {cr ? ` · cache ${formatTokens(cr)}` : ""}
+        </span>
+      </span>
+    );
     sub = cost > 0 ? `$${cost.toFixed(4)}` : null;
   } else if (event.kind === "error") {
     glyph = "!";
     glyphClass = "error";
-    text = <span>{(event.payload.message as string) ?? "error"}</span>;
+    const message = (event.payload.message as string) ?? "error";
+    text = <span className="log-name">{message}</span>;
+    const subtype = event.payload.subtype as string | undefined;
+    if (subtype) sub = subtype;
   } else {
-    text = <span>{event.kind}</span>;
+    text = <span className="log-name">{event.kind}</span>;
   }
 
+  const hasPayload =
+    event.payload && typeof event.payload === "object" && Object.keys(event.payload).length > 0;
+
   return (
-    <div className="log-row">
-      <span className="log-time">{formatClock(event.at)}</span>
-      <span className={`log-glyph ${glyphClass}`}>{glyph}</span>
-      <span className="log-text">
-        {text}
-        {sub && <div className="log-sub">{sub}</div>}
-      </span>
-      {channel && <span className="log-channel">{channel.label}</span>}
+    <div className={`log-row${expanded ? " expanded" : ""}`}>
+      <button
+        type="button"
+        className="log-row-head"
+        onClick={() => hasPayload && setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-label="Toggle raw payload"
+        disabled={!hasPayload}
+      >
+        <span className="log-time">{formatClock(event.at)}</span>
+        <span className={`log-glyph ${glyphClass}`}>{glyph}</span>
+        <span className="log-text">
+          {text}
+          {sub && <div className="log-sub">{sub}</div>}
+        </span>
+        {channel && <span className="log-channel">{channel.label}</span>}
+        {hasPayload && (
+          <span className="log-chev" aria-hidden>
+            {expanded ? "▾" : "▸"}
+          </span>
+        )}
+      </button>
+      {expanded && hasPayload && (
+        <pre className="log-payload">{safeJsonStringify(event.payload)}</pre>
+      )}
     </div>
   );
 }
