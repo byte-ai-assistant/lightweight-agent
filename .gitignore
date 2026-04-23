@@ -7,6 +7,7 @@ profile/
 tsconfig.tsbuildinfo
 logs/
 credentials/
+docs/
 memory/*.qmd
 !memory/*.example.qmd
 
