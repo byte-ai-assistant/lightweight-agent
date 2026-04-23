@@ -261,7 +261,6 @@ export default function Home() {
   const [logFilter, setLogFilter] = useState<"all" | "tool" | "memory" | "cron" | "error">("all");
   const [skillSearch, setSkillSearch] = useState("");
 
-  const bottomRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -304,9 +303,20 @@ export default function Home() {
           loaded.push({ role: "assistant", content: entry.assistantResponse, channel, ts });
         }
         setMessages(loaded);
-        requestAnimationFrame(() =>
-          bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" }),
-        );
+        // Pin to true bottom (past the dock-height padding). Layout may
+        // shift as markdown/code blocks finish rendering, so re-pin across
+        // a short window to catch late shifts. `instant` bypasses the CSS
+        // smooth-scroll animation, which was racing with layout changes.
+        const pin = () => {
+          const el = scrollerRef.current;
+          if (el) el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+        };
+        requestAnimationFrame(() => {
+          pin();
+          requestAnimationFrame(pin);
+          setTimeout(pin, 80);
+          setTimeout(pin, 250);
+        });
       })
       .catch(() => {});
   }, []);
@@ -370,11 +380,7 @@ export default function Home() {
     return () => clearInterval(iv);
   }, [loading, fetchLogs]);
 
-  // ── Scroll tracking ──
-  useEffect(() => {
-    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, loading, atBottom, activeOp]);
-
+  // ── Scroll tracking (FAB visibility only; no auto-scroll after init) ──
   const onScroll = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -382,8 +388,18 @@ export default function Home() {
     setAtBottom(distance < 80);
   }, []);
 
+  // Re-check FAB visibility when content grows (onScroll only fires on user
+  // scroll, not on content-driven height changes during streaming).
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setAtBottom(distance < 80);
+  }, [messages, loading, activeOp]);
+
   const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = scrollerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
 
   // ── Send ──
@@ -398,7 +414,6 @@ export default function Home() {
     setLoading(true);
     setStatusText("");
     setActiveOp(null);
-    setAtBottom(true);
 
     const pendingTools: ToolCall[] = [];
     const pendingHits: MemoryHit[] = [];
@@ -1677,7 +1692,6 @@ export default function Home() {
               </div>
             )}
 
-            <div ref={bottomRef} />
           </div>
         </div>
 
