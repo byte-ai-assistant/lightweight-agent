@@ -26,8 +26,66 @@ The phase has a second deliverable beyond the research doc: a folder of **raw ma
 
 ## Inputs
 
-- A research question from the user (e.g. *"is gut microbiome alpha-diversity causally linked to depression severity in adults?"*).
-- If the question is vague, ask one focusing question before proceeding — e.g. *"are you interested in onset of depression, severity in already-depressed populations, or remission after treatment? And in what age range?"*
+- **Thread (required):** the question to drill. For round 1, this is the user's original research question. For rounds ≥ 2, this is the user-picked area from the prior round's `synthesis/r<N-1>.md` gate.
+- **Round number `N` (required, integer ≥ 1):** passed in by `sci-research-cycle`. Used to write outputs to `research/rN.md`.
+- **Topic slug:** the project directory under `{root}/docs/sci/`.
+- If the thread is vague (round 1 only — user-supplied questions can be vague), ask one focusing question before proceeding — e.g. *"are you interested in onset of depression, severity in already-depressed populations, or remission after treatment? And in what age range?"* Do not ask focusing questions on rounds ≥ 2; the thread came from the prior round's synthesis and is precise by construction.
+
+## First-Principles Drilling
+
+The phase is not just a literature survey at one level. It recursively pursues the **why** behind the thread, building a why-tree on disk in `depth-log.md`. Each "why?" is a sub-question; each sub-question gets its own sourced answer; each answer can spawn another "why?".
+
+**Per-round depth cap: 3 nested whys.** When the cap is hit on a leaf, leave it Answered (not terminal) — the user can opt to drill further on a future round.
+
+### Leaf states
+
+Each leaf in `depth-log.md` carries one of these states:
+
+| State | Meaning | When to mark |
+|---|---|---|
+| **Answered** | Sourced explanation exists; not terminal. Can still ask "why?" again next round. | Default. The literature gave a credible mechanism but the why-chain hasn't bottomed out. |
+| **Fundamental** | Bottoms out at established law / conservation principle / well-replicated mechanism with ≥3 independent replications spanning ≥10 years and no active controversy. | Use **sparingly**. Most "fundamental" claims still have a deeper why. Only mark Fundamental if asking deeper isn't productive. |
+| **Obvious** | Tautology, definition, or common knowledge a domain reader already has. | Mark if explaining this would feel pedantic to a researcher in the field. E.g. "0°C is the definition of the Celsius freezing point" → Obvious. |
+| **Unknown** | The literature explicitly names its own ignorance. Cite the admission. | Requires an explicit citation where authors say "the mechanism remains contested" / "no causal pathway has been established" etc. |
+| **Under-researched** | Thorough search yielded little; document strategies tried (≥3 distinct: different keyword sets, related-mechanism queries, recent reviews). | Use when search came up empty. Distinct from Unknown — Unknown requires an explicit admission; Under-researched is the absence of literature. |
+
+**Calibration:** Default to Answered. Promote to a terminal state (Fundamental / Obvious / Unknown / Under-researched) only when the criteria are clearly met. Over-marking terminal states truncates productive lines of inquiry.
+
+### Drilling procedure (round N)
+
+1. **Identify the entry node** in `depth-log.md`:
+   - Round 1: create the root `Q0: <original question>`. Entry node is Q0.
+   - Round ≥ 2: find the node in the existing tree that matches the input thread (by user-picked node ID or fuzzy text match). If no match, append a new top-level branch under Q0 and note the round it was added.
+2. **Layer 1 (depth 1 below entry):** survey literature for the direct answer to the entry-node question. Write findings; classify the leaf.
+3. **Layer 2 (depth 2):** if Layer 1 leaf is Answered (not terminal), formulate the next "why?" — what mechanism would have to hold for Layer 1's claim to be true? Survey for that. Classify.
+4. **Layer 3 (depth 3):** if Layer 2 leaf is Answered, formulate the third "why?". Survey. Classify.
+5. **Stop at 3 layers** even if leaves are still Answered. Synthesize prompts the user.
+
+If a layer terminates (Fundamental / Obvious / Unknown / Under-researched), do not pursue deeper layers under that leaf this round. Multiple sibling leaves at the same depth are allowed if the layer above splits into separate sub-mechanisms; in that case, drill each sibling but stay within the 3-layer cap from the entry.
+
+### Updating `depth-log.md`
+
+After completing all layers in this round, append the new sub-tree to `{root}/docs/sci/<topic-slug>/depth-log.md`. The format:
+
+```
+Q0: <original question>
+├── R1 [<state>]: <one-line summary> [round 1]
+│   ├── Why? Q1.1: <sub-question>
+│   │   └── R<N> [<state>]: <summary> [round N, citations]
+│   └── Why? Q1.2: <sub-question>
+│       └── R<N> [<state>]: <summary>
+...
+```
+
+Each leaf line includes:
+- The state in `[brackets]`
+- A one-line summary of the answer at that leaf
+- The round number that added it (e.g. `[round 2]`)
+- Inline citations (Smith 2022, Jones 2023) for sourced claims
+- For Unknown: the citation of the admission ("Smith 2024 §4: 'mechanism remains contested'").
+- For Under-researched: the strategies tried (e.g. "tried: 'tryptophan brain serotonin causal', 'peripheral tryptophan central serotonin', '5-HT precursor uptake review' — no substantive results").
+
+If `depth-log.md` does not exist yet (round 1), create it with `Q0:` as the root.
 
 ## The Process
 
@@ -72,7 +130,7 @@ What mechanisms have been proposed for the underlying phenomenon? Where does the
 For every source you cite, save a text-format artifact to `{root}/docs/sci/<topic-slug>/raw/`. The graph phase needs this corpus.
 
 ```bash
-mkdir -p {root}/docs/sci/<topic-slug>/{raw,research,graphs,hypotheses}
+mkdir -p {root}/docs/sci/<topic-slug>/{raw,research,graphs,answers,synthesis,hypotheses}
 ```
 
 Per source, write one of:
@@ -132,10 +190,10 @@ No gaps found = you did not look hard enough. Go back to step 2.
 
 ## Output
 
-Write to `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md` with this structure:
+Write to `{root}/docs/sci/<topic-slug>/research/rN.md` (where N is the round number) with this structure. The first line of the doc is the thread that was researched this round; round 1's thread is the original research question.
 
 ```markdown
-# Research: <topic>
+# Research round N: <thread>
 
 **Date:** YYYY-MM-DD
 **Research question:** <one-sentence, specific>
@@ -189,6 +247,8 @@ Files in `{root}/docs/sci/<topic-slug>/raw/`:
 - <e.g. ascertainment bias in UK Biobank toward healthy adults>
 ```
 
+**In addition,** ensure `{root}/docs/sci/<topic-slug>/depth-log.md` is updated per the "Updating `depth-log.md`" instructions in the First-Principles Drilling section above. If you finish this round without writing to depth-log.md, the round is not complete.
+
 ## Rationalization Table
 
 If you hear yourself thinking these, STOP. You are not doing research — you are doing motivated reasoning.
@@ -237,4 +297,10 @@ Writing *"X causes Y"* in a finding row when the cited study only showed *"X is 
 
 ## Handoff
 
-When the output doc is complete AND `{root}/docs/sci/<topic-slug>/raw/` has at least 5 files, the cycle proceeds to `sci-graphify`. The raw-materials folder is the input the graph phase ingests; the gap section is what the hypothesis phase will eventually exploit. Both must be in good shape before handoff.
+When this round's work is complete, the following must be on disk:
+
+- `{root}/docs/sci/<topic-slug>/research/rN.md` — this round's survey doc with at least one *Gaps* entry on the active thread.
+- `{root}/docs/sci/<topic-slug>/raw/` — populated with at least 5 source files **cumulatively** (not per round; rounds 2+ may add fewer if the corpus is already substantial).
+- `{root}/docs/sci/<topic-slug>/depth-log.md` — extended with this round's new layers and leaf states.
+
+The orchestrator (`sci-research-cycle`) then proceeds to `sci-graphify` for this round, followed by `sci-synthesize`. This skill does not invoke either of those — that's the orchestrator's job.
