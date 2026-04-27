@@ -1,6 +1,6 @@
 ---
 name: sci-research-cycle
-description: Use when running a full scientific research cycle from a fresh question to a falsifiable hypothesis — orchestrates literature survey → knowledge-graph synthesis → hypothesis generation, with mandatory user gates between phases. Terminal artifact is a hypothesis doc with predicted effect size, kill criteria, and ruled-out alternatives.
+description: Use to run one round of iterative scientific research on a thread. Orchestrates sci-research → sci-graphify → sci-synthesize, then stops at a user gate. Hypothesis generation is NOT part of this cycle — it is opt-in via sci-hypothesize. Each round drills up to 3 layers of why-chain on the chosen thread; the user decides between rounds whether to dig deeper, switch threads, hypothesize, or stop.
 metadata:
   openclaw:
     requires:
@@ -8,125 +8,114 @@ metadata:
         - EXA_API_KEY
 ---
 
-# Sci Research Cycle — Orchestrator
+# Sci Research Cycle — Iterative Orchestrator
 
 ## Working directory
 
-The agent's pinned working directory is `{root}`. All paths below that begin with `docs/` are relative to that root — i.e. `docs/sci/foo/` means `{root}/docs/sci/foo/`. Do not write scientific artifacts outside `{root}/docs/sci/`.
+The agent's pinned working directory is `{root}`. All paths below that begin with `docs/` are relative to that root. Do not write scientific artifacts outside `{root}/docs/sci/`.
 
 ## Overview
 
-This skill chains the three scientific phases in order. Each phase produces a markdown artifact that the next phase consumes. The terminal output is a falsifiable hypothesis doc.
-
-**Every research project lives in its own top-level directory under `{root}/docs/sci/<topic-slug>/`** with four sub-folders: `raw/`, `research/`, `graphs/`, `hypotheses/`. Do not scatter artifacts across flat shared folders.
+One round of the iterative research loop. Each round drills one thread up to 3 layers of why-chain, then stops at a user gate.
 
 ```
-research question
-   → [sci-research]    → {root}/docs/sci/<topic-slug>/research/<date>-<topic-slug>.md
-                       + {root}/docs/sci/<topic-slug>/raw/  (raw materials for the graph)
-   → [sci-graphify]    → {root}/docs/sci/<topic-slug>/graphs/<date>-<topic-slug>.md
-                       + {root}/docs/sci/<topic-slug>/graphs/graphify-out/  (graph.json, GRAPH_REPORT.md, graph.html)
-   → [sci-hypothesize] → {root}/docs/sci/<topic-slug>/hypotheses/<date>-<name-slug>.md  ← terminal doc
-   → "Hand off to experimental design or a human."
+this round's thread (round N):
+   → [sci-research]    drills up to 3 layers; classifies leaves;
+                       writes research/rN.md + raw/ files +
+                       extends depth-log.md
+   → [sci-graphify]    rebuilds graph from full accumulated raw/ corpus;
+                       writes graphs/rN/ artifacts + graphs/rN.md reading
+   → [sci-synthesize]  rewrites answer.md (cumulative); writes
+                       answers/rN.md (frozen snapshot) + synthesis/rN.md
+                       (round summary + ranked next-areas)
+   → user gate: dig deeper / propose other area / hypothesize / stop
 ```
 
-## Why a graph phase
+The cycle terminates after one round. To run another round, the user must explicitly choose "dig deeper on [n]" or propose another area, which re-invokes this cycle with `round=N+1` and the new thread.
 
-In quant work, the gap section of a research doc is enough to seed hypotheses. In science, the gap section by itself is too narrow — it lists what the literature hasn't yet asked, but it doesn't surface *which existing concepts unexpectedly link across subfields*. The most generative scientific hypotheses come from cross-community bridges (a method from one field applied to a problem in another, a mechanism observed in one organism replicated in a related one). The graph phase makes those bridges visible. Without it, hypotheses tend to restate what was already in the abstracts.
+## Inputs
+
+- **Thread (required):** the question this round drills.
+  - Round 1: the user's original research question.
+  - Round ≥ 2: the user-picked thread from the prior round's `synthesis/r<N-1>.md` ranked proposals.
+- **Round number `N` (required):** integer ≥ 1.
+- **Topic slug:** the project directory under `{root}/docs/sci/<topic-slug>/`. For round 1, derive it from the question (lowercase-kebab-case). For rounds ≥ 2, the dispatcher passes the existing slug.
 
 ## Preconditions
 
-- User has supplied a research question or topic (or you are resuming an in-flight chain).
-- `EXA_API_KEY` is set (research phase depends on it).
-- `python3 -c "import graphify"` succeeds (graphify phase depends on it). If not, print:
+- `EXA_API_KEY` is set (research phase requires it).
+- `python3 -c "import graphify"` succeeds. If not, print the install command from `sci-graphify` and stop.
+- `{root}/docs/sci/<topic-slug>/` directory tree exists (create on round 1):
+  ```bash
+  mkdir -p {root}/docs/sci/<topic-slug>/{raw,research,graphs,answers,synthesis,hypotheses}
   ```
-  python3 -m pip install graphifyy -q
-  ```
-  Wait for the user to install before continuing.
-- `{root}/docs/sci/<topic-slug>/{research,raw,graphs,hypotheses}/` exist (create if not — `mkdir -p {root}/docs/sci/<topic-slug>/{research,raw,graphs,hypotheses}`).
-
-## Resume Logic
-
-Before starting Phase 1, list existing research projects and their highest-complete artifact. Ask the user whether to resume one or start fresh.
-
-```bash
-# List every existing research project and whether each phase is complete.
-for d in {root}/docs/sci/*/; do
-  slug=$(basename "$d")
-  [ "$slug" = ".venv" ] && continue
-  research=$(ls "$d/research" 2>/dev/null | head -1)
-  graph=$(ls "$d/graphs" 2>/dev/null | grep -E '\.md$' | head -1)
-  hyp=$(ls "$d/hypotheses" 2>/dev/null | grep -E '\.md$' | head -1)
-  echo "$slug | research:${research:-—} | graph:${graph:-—} | hypothesis:${hyp:-—}"
-done
-```
-
-If the user confirms resume, jump to the next incomplete phase. Do not re-run completed phases without explicit confirmation — overwriting a research doc loses the gap list that fed the graph and the hypotheses.
-
----
+- For rounds ≥ 2: `depth-log.md`, `answer.md`, and at least one prior `answers/r<M>.md` exist. If not, the dispatcher made a routing error — stop and ask the user to clarify.
 
 ## Phase 1 — Research
 
 Load skill: `sci-research`
 
-- Input: the user's research question.
-- Run the structured literature + dataset + replication survey.
-- Save raw materials (abstracts, key passages, dataset cards, methodology notes) to `{root}/docs/sci/<topic-slug>/raw/` — these are the corpus the next phase will graph.
-- Output: `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md`.
-- **Gate:** research doc written on disk with at least one *Gaps* entry AND `{root}/docs/sci/<topic-slug>/raw/` populated with at least 5 source files. Show the user the findings and ask: *"Shall we proceed to graph synthesis, or do you want me to dig deeper on any subdomain first?"* Wait for explicit go-ahead.
+- Inputs: thread, round number N, topic slug.
+- Drills up to 3 layers on the thread; classifies leaves (Answered / Fundamental / Obvious / Unknown / Under-researched).
+- Outputs:
+  - `{root}/docs/sci/<topic-slug>/research/rN.md`
+  - New entries in `{root}/docs/sci/<topic-slug>/raw/` (cumulative — does not delete prior rounds' files)
+  - Extended `{root}/docs/sci/<topic-slug>/depth-log.md`
+- **Internal gate (orchestrator-checked, no user interaction):** verify research/rN.md exists, raw/ has ≥ 5 cumulative files, depth-log.md was updated. If any check fails, stop and surface the error to the user.
 
 ## Phase 2 — Graphify
 
 Load skill: `sci-graphify`
 
-- Input: the raw materials in `{root}/docs/sci/<topic-slug>/raw/`.
-- Build the knowledge graph using graphify, label communities, identify god nodes, enumerate surprising cross-community connections.
-- Output: `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md` (annotated reading) + `{root}/docs/sci/<topic-slug>/graphs/graphify-out/` (graphify artifacts).
-- **Gate:** graph reading doc written with at least 3 *interesting connections* explicitly enumerated. Show the user the god nodes, communities, and surprising connections. Ask: *"Which connection (or god node) should I aim a hypothesis at?"* Wait for an explicit selection.
+- Inputs: round number N, full accumulated `raw/` corpus, current research/rN.md, topic slug.
+- Rebuilds graph from full corpus.
+- Outputs:
+  - `{root}/docs/sci/<topic-slug>/graphs/rN/` (graph.json, GRAPH_REPORT.md, graph.html)
+  - `{root}/docs/sci/<topic-slug>/graphs/rN.md` (annotated reading)
+- **Internal gate:** verify both artifacts exist. If graph has < 15 nodes or < 3 communities, surface the corpus-too-thin warning to the user and ask whether to add sources or proceed with the thin graph.
 
-## Phase 3 — Hypothesize
+## Phase 3 — Synthesize
 
-Load skill: `sci-hypothesize`
+Load skill: `sci-synthesize`
 
-- Input: the research doc, the graph reading doc, and the user-selected target (god node or surprising connection).
-- Construct one or more falsifiable hypotheses; run the anti-pattern checklist; pre-specify the kill criteria.
-- Output: `{root}/docs/sci/<topic-slug>/hypotheses/YYYY-MM-DD-<name-slug>.md`.
-- **Gate:** hypothesis doc written, anti-pattern checklist passed (no unfalsifiable claims, no pattern-without-mechanism, no missing kill criteria). Print the terminal message and stop.
+- Inputs: round number N, thread, topic slug. Reads research/rN.md, graphs/rN/, depth-log.md, prior answer.md (if exists).
+- Outputs:
+  - `{root}/docs/sci/<topic-slug>/answers/rN.md` (frozen snapshot)
+  - `{root}/docs/sci/<topic-slug>/answer.md` (rewritten cumulative)
+  - `{root}/docs/sci/<topic-slug>/synthesis/rN.md` (round summary + ranked next-areas)
+- **User gate:** synthesize itself prints the gate prompt. The orchestrator does not advance — it exits after synthesize completes.
 
-## Terminal State
+## Termination
 
-After Phase 3, print exactly:
+This skill exits after Phase 3. The user's choice at the gate is handled by `sci-agent`:
 
-```
-HYPOTHESIS COMPLETE. {root}/docs/sci/<topic-slug>/hypotheses/<file>.md is ready.
+- "Dig deeper on [n]" → dispatcher re-invokes this cycle with `round=N+1` and the picked thread.
+- "Propose a different area: <text>" → dispatcher re-invokes this cycle with `round=N+1` and the user's text as the thread.
+- "Hypothesize" → dispatcher routes to `sci-hypothesize` (does NOT re-invoke this cycle).
+- "Stop" → dispatcher acknowledges and exits.
 
-The hypothesis spec includes:
- - Falsifiable claim (signal, prediction, sign, effect size, universe, horizon)
- - Mechanism (causal pathway with named entities from the graph)
- - Predicted effect size with confidence interval — set BEFORE outcome data is touched
- - Pre-specified kill criteria (numeric)
- - Alternative explanations to rule out (and how the experiment must be designed to rule them out)
- - Statistical considerations (sample size, multiple-comparison correction, power)
- - Connection to the knowledge graph (which god node or surprising connection it targets)
+This cycle never auto-loops. The orchestrator does not know whether the next user message will be a continuation or something else.
 
-Next step: hand to experimental design (or a human protocol writer). The experiment must
-be pre-registered against this doc. Any deviation from the kill criteria below means the
-hypothesis is dead — do not rescue it with parameter tweaks.
-```
+## Hard Rules
 
-Then EXIT. Do not invoke any experimental-design or implementation skill from this orchestrator.
-
-## Hard Gates
-
-- **Do NOT skip Phase 1.** Even if the user believes they already know the field, run the research phase. Confirmation bias and recency bias are at their worst when you trust your own summary of literature.
-- **Do NOT skip Phase 2.** Hypothesizing without first looking at the graph is how you end up restating known findings. The graph is what surfaces the non-obvious bridge between subdomains.
-- **Do NOT run experiments.** Not in any phase. The terminal output is markdown.
-- **Do NOT auto-invoke any downstream skill.** The hand-off is a human decision. Print the instruction and stop.
-- **Every gate requires user approval in chat.** You do not self-advance through phases.
-- **Every artifact must cite its sources.** A claim without a citation is flagged *unverified* and excluded from the next phase's input.
+- **Do not skip phases.** Every round runs research → graphify → synthesize in order.
+- **Do not auto-invoke `sci-hypothesize` from this cycle.** Hypothesis generation is opt-in only and is dispatched by `sci-agent`.
+- **Do not auto-loop into round N+1.** The user gate at the end of Phase 3 is mandatory.
+- **Do not run experiments.** Terminal output is markdown.
+- **Every internal gate failure surfaces to the user.** Do not silently retry or paper over missing artifacts.
 
 ## Error Recovery
 
-If this session crashes mid-cycle, the next invocation of `sci-agent` will detect the highest-complete artifact and ask whether to resume. Artifacts are idempotent — a re-run of a phase overwrites its output file (with a confirmation prompt) but leaves prior phases untouched.
+If this session crashes mid-round:
+- Phase 1 incomplete (no research/rN.md): re-run the cycle with the same thread and round; this is idempotent (overwrites research/rN.md with confirmation).
+- Phase 1 complete but Phase 2 incomplete: re-run with same args; sci-graphify rebuilds the round's graph dir from the existing corpus.
+- Phase 2 complete but Phase 3 incomplete: re-run; sci-synthesize uses the existing rN artifacts.
+- depth-log.md corruption: prefer manual repair over automatic regeneration. The depth log is the source of truth for the why-tree.
 
-If `sci-graphify` fails because graphify can't process the corpus (e.g. only PDFs and no text extracted), drop back to Phase 1 and ask the user whether to add more text-format sources or to skip the graph phase. Skipping the graph phase is allowed only with explicit user confirmation, and the resulting hypothesis doc must be flagged `**Graph phase: skipped**` so the experimenter knows the bridge analysis was not done.
+A re-run of any phase overwrites its current-round output (with a confirmation prompt) but leaves prior rounds untouched. `answer.md` is the only file that aggregates across rounds — synthesize is responsible for not double-counting if a round is re-run.
+
+## What this cycle is NOT
+
+- Not a hypothesis generator. That is `sci-hypothesize`, opt-in only.
+- Not a multi-round runner. One round per invocation.
+- Not a topic creator. Round 1 of a fresh topic still expects the dispatcher to have picked the slug; this cycle creates the directory tree if missing but does not derive a slug from a freeform question — the dispatcher does that.
