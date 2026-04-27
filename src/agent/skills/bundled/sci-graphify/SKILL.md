@@ -7,7 +7,9 @@ description: Use after sci-research completes and before sci-hypothesize — bui
 
 ## Working directory
 
-The agent's pinned working directory is `{root}`. Scientific artifacts live under `{root}/docs/sci/<topic-slug>/`. Graphify output for this project lives at `{root}/docs/sci/<topic-slug>/graphs/graphify-out/`. Bash commands in this skill assume the agent is operating from `{root}` unless `cd`'d explicitly.
+The agent's pinned working directory is `{root}`. Scientific artifacts live under `{root}/docs/sci/<topic-slug>/`. **Per-round graphify output for this project lives at `{root}/docs/sci/<topic-slug>/graphs/rN/`** (where N is the round number). Bash commands in this skill assume the agent is operating from `{root}` unless `cd`'d explicitly.
+
+Each round rebuilds the graph from the **full accumulated `raw/` corpus** — there is no incremental merge across rounds. This is intentional: graphify is fast enough to full-rebuild on a scientific corpus, and merging communities across rounds risks stale labels.
 
 ## The Rule
 
@@ -20,7 +22,7 @@ In scientific work, the most generative hypotheses come from *cross-community br
 This phase does three things:
 1. Turns the raw-materials folder (`{root}/docs/sci/<topic-slug>/raw/`) into a knowledge graph using `graphify`.
 2. Reads `GRAPH_REPORT.md` and annotates it: what are the god nodes, what do the communities correspond to, which cross-community connections are *interesting*.
-3. Writes the annotated reading to `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md` — this is the input the hypothesis phase uses to choose targets.
+3. Writes the annotated reading to `{root}/docs/sci/<topic-slug>/graphs/rN.md` — this is the input the synthesize phase uses to integrate graph signal into the round's answer.
 
 ## Prerequisites
 
@@ -35,11 +37,12 @@ If the install fails, stop and ask the user to install graphify themselves. Do n
 
 ## Inputs
 
-- The research doc from `sci-research`: `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md`.
-- The raw-materials folder: `{root}/docs/sci/<topic-slug>/raw/` (must contain ≥ 5 markdown files).
+- **Round number `N` (required):** passed in by `sci-research-cycle`. Determines output dir.
+- The full accumulated raw-materials folder: `{root}/docs/sci/<topic-slug>/raw/` (must contain ≥ 5 markdown files; cumulatively across all prior rounds).
+- The current round's research doc: `{root}/docs/sci/<topic-slug>/research/rN.md`.
 - The topic slug (the project directory name under `{root}/docs/sci/`).
 
-If the raw-materials folder does not exist or has fewer than 5 files, STOP. Drop back to `sci-research` and have the user add more sources. A sparse corpus produces a sparse graph, which produces no usable communities.
+If the raw-materials folder has fewer than 5 files, STOP. Drop back to `sci-research`. A sparse corpus produces a sparse graph, which produces no usable communities.
 
 ## Inventory the Corpus
 
@@ -58,31 +61,30 @@ If the mix is wrong, return to `sci-research`. Do not patch the gaps silently �
 
 ## Build the Graph
 
-The graphify artifacts go inside the project's `graphs/graphify-out/` folder, alongside the annotated reading doc in `graphs/`.
+The graphify artifacts go inside the project's `graphs/` folder, alongside the annotated reading doc in `graphs/`.
 
 ```bash
-mkdir -p {root}/docs/sci/<topic-slug>/graphs/graphify-out
-cd {root}/docs/sci/<topic-slug>/graphs
+mkdir -p {root}/docs/sci/<topic-slug>/graphs/rN
+cd {root}/docs/sci/<topic-slug>/graphs/rN
 ```
 
-All subsequent commands assume `cwd = {root}/docs/sci/<topic-slug>/graphs/`. Raw materials for this project are at `../raw/` (one level up from this graphs folder).
+All subsequent commands assume `cwd = {root}/docs/sci/<topic-slug>/graphs/rN/`. Raw materials for this project are at `../../raw/` (two levels up from this round's graphs folder).
 
 Write the Python interpreter path once, then reuse it:
 
 ```bash
 python3 -c "import sys; open('.graphify_python', 'w').write(sys.executable)"
-python3 -c "import sys; open('graphify-out/.graphify_python', 'w').write(sys.executable)"
 ```
 
 ### Step 1 — Detect files
 
 ```bash
-$(cat graphify-out/.graphify_python) -c "
+$(cat .graphify_python) -c "
 import json
 from graphify.detect import detect
 from pathlib import Path
-result = detect(Path('../raw'))
-Path('graphify-out/.graphify_detect.json').write_text(json.dumps(result))
+result = detect(Path('../../raw'))
+Path('.graphify_detect.json').write_text(json.dumps(result))
 print(f'Corpus: {result.get(\"total_files\",0)} files, ~{result.get(\"total_words\",0):,} words')
 for ftype in ['code','document','paper','image','video']:
     files = result.get('files',{}).get(ftype, [])
@@ -91,7 +93,7 @@ for ftype in ['code','document','paper','image','video']:
 "
 ```
 
-The relative path `../raw` resolves to `{root}/docs/sci/<topic-slug>/raw/` given the `cd` above.
+The relative path `../../raw` resolves to `{root}/docs/sci/<topic-slug>/raw/` given the `cd` above (cwd is `graphs/rN/`).
 
 If `total_files == 0` or `total_words < 1000`, stop. The graph will not produce meaningful communities. Return to `sci-research`.
 
@@ -100,10 +102,10 @@ If `total_files == 0` or `total_words < 1000`, stop. The graph will not produce 
 Scientific corpora are almost entirely markdown and PDFs, so AST extraction returns nothing useful. Run the stub anyway so downstream steps don't break:
 
 ```bash
-$(cat graphify-out/.graphify_python) -c "
+$(cat .graphify_python) -c "
 import json
 from pathlib import Path
-Path('graphify-out/.graphify_ast.json').write_text(json.dumps({
+Path('.graphify_ast.json').write_text(json.dumps({
     'nodes': [], 'edges': [], 'input_tokens': 0, 'output_tokens': 0
 }))
 print('AST: 0 nodes (scientific corpus, no code)')
@@ -127,7 +129,7 @@ You are the language model doing semantic extraction. For each file in the raw-m
   - `conceptually_related_to` — shared concept without structural link
 - **Confidence** — `EXTRACTED` (stated in text) or `INFERRED` (you inferred the link) or `AMBIGUOUS` (uncertain).
 
-Write the combined result to `graphify-out/.graphify_semantic.json`:
+Write the combined result to `.graphify_semantic.json`:
 
 ```json
 {
@@ -155,11 +157,11 @@ Rules:
 ### Step 4 — Merge AST (empty) + semantic
 
 ```bash
-$(cat graphify-out/.graphify_python) -c "
+$(cat .graphify_python) -c "
 import json
 from pathlib import Path
-ast = json.loads(Path('graphify-out/.graphify_ast.json').read_text())
-sem = json.loads(Path('graphify-out/.graphify_semantic.json').read_text())
+ast = json.loads(Path('.graphify_ast.json').read_text())
+sem = json.loads(Path('.graphify_semantic.json').read_text())
 seen = {n['id'] for n in ast['nodes']}
 merged_nodes = list(ast['nodes'])
 for n in sem['nodes']:
@@ -172,7 +174,7 @@ merged = {
     'input_tokens': sem.get('input_tokens', 0),
     'output_tokens': sem.get('output_tokens', 0),
 }
-Path('graphify-out/.graphify_extract.json').write_text(json.dumps(merged, indent=2))
+Path('.graphify_extract.json').write_text(json.dumps(merged, indent=2))
 print(f'Merged: {len(merged_nodes)} nodes, {len(merged[\"edges\"])} edges')
 "
 ```
@@ -180,7 +182,7 @@ print(f'Merged: {len(merged_nodes)} nodes, {len(merged[\"edges\"])} edges')
 ### Step 5 — Build graph, cluster, analyze
 
 ```bash
-$(cat graphify-out/.graphify_python) -c "
+$(cat .graphify_python) -c "
 import json
 from graphify.build import build_from_json
 from graphify.cluster import cluster, score_all
@@ -189,8 +191,8 @@ from graphify.report import generate
 from graphify.export import to_json
 from pathlib import Path
 
-extraction = json.loads(Path('graphify-out/.graphify_extract.json').read_text())
-detection  = json.loads(Path('graphify-out/.graphify_detect.json').read_text())
+extraction = json.loads(Path('.graphify_extract.json').read_text())
+detection  = json.loads(Path('.graphify_detect.json').read_text())
 
 G = build_from_json(extraction)
 communities = cluster(G)
@@ -201,9 +203,9 @@ surprises = surprising_connections(G, communities)
 labels = {cid: 'Community ' + str(cid) for cid in communities}
 questions = suggest_questions(G, communities, labels)
 
-report = generate(G, communities, cohesion, labels, gods, surprises, detection, tokens, '../raw', suggested_questions=questions)
-Path('graphify-out/GRAPH_REPORT.md').write_text(report)
-to_json(G, communities, 'graphify-out/graph.json')
+report = generate(G, communities, cohesion, labels, gods, surprises, detection, tokens, '../../raw', suggested_questions=questions)
+Path('GRAPH_REPORT.md').write_text(report)
+to_json(G, communities, 'graph.json')
 analysis = {
     'communities': {str(k): v for k, v in communities.items()},
     'cohesion': {str(k): v for k, v in cohesion.items()},
@@ -211,7 +213,7 @@ analysis = {
     'surprises': surprises,
     'questions': questions,
 }
-Path('graphify-out/.graphify_analysis.json').write_text(json.dumps(analysis, indent=2))
+Path('.graphify_analysis.json').write_text(json.dumps(analysis, indent=2))
 print(f'Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges, {len(communities)} communities')
 "
 ```
@@ -220,12 +222,12 @@ If the graph has fewer than 15 nodes or fewer than 3 communities, the corpus is 
 
 ### Step 6 — Label communities
 
-Read `graphify-out/.graphify_analysis.json`. For each community, look at its top-degree node labels and assign a 2–5 word plain-language name that reflects the scientific subdomain (e.g. *"Microbiome measurement methods"*, *"Depression diagnostic instruments"*, *"Gut-brain vagal signalling"*, *"UK Biobank cohort analyses"*).
+Read `.graphify_analysis.json`. For each community, look at its top-degree node labels and assign a 2–5 word plain-language name that reflects the scientific subdomain (e.g. *"Microbiome measurement methods"*, *"Depression diagnostic instruments"*, *"Gut-brain vagal signalling"*, *"UK Biobank cohort analyses"*).
 
 Then regenerate the report:
 
 ```bash
-$(cat graphify-out/.graphify_python) -c "
+$(cat .graphify_python) -c "
 import json
 from graphify.build import build_from_json
 from graphify.cluster import score_all
@@ -233,9 +235,9 @@ from graphify.analyze import god_nodes, surprising_connections, suggest_question
 from graphify.report import generate
 from pathlib import Path
 
-extraction = json.loads(Path('graphify-out/.graphify_extract.json').read_text())
-detection  = json.loads(Path('graphify-out/.graphify_detect.json').read_text())
-analysis   = json.loads(Path('graphify-out/.graphify_analysis.json').read_text())
+extraction = json.loads(Path('.graphify_extract.json').read_text())
+detection  = json.loads(Path('.graphify_detect.json').read_text())
+analysis   = json.loads(Path('.graphify_analysis.json').read_text())
 
 G = build_from_json(extraction)
 communities = {int(k): v for k, v in analysis['communities'].items()}
@@ -245,9 +247,9 @@ tokens = {'input': extraction.get('input_tokens',0), 'output': extraction.get('o
 labels = LABELS_DICT  # replace with the dict you built
 
 questions = suggest_questions(G, communities, labels)
-report = generate(G, communities, cohesion, labels, analysis['gods'], analysis['surprises'], detection, tokens, '../raw', suggested_questions=questions)
-Path('graphify-out/GRAPH_REPORT.md').write_text(report)
-Path('graphify-out/.graphify_labels.json').write_text(json.dumps({str(k): v for k, v in labels.items()}))
+report = generate(G, communities, cohesion, labels, analysis['gods'], analysis['surprises'], detection, tokens, '../../raw', suggested_questions=questions)
+Path('GRAPH_REPORT.md').write_text(report)
+Path('.graphify_labels.json').write_text(json.dumps({str(k): v for k, v in labels.items()}))
 print('Report updated with community labels')
 "
 ```
@@ -255,22 +257,22 @@ print('Report updated with community labels')
 ### Step 7 — HTML visualisation (optional but default)
 
 ```bash
-$(cat graphify-out/.graphify_python) -c "
+$(cat .graphify_python) -c "
 import json
 from graphify.build import build_from_json
 from graphify.export import to_html
 from pathlib import Path
 
-extraction = json.loads(Path('graphify-out/.graphify_extract.json').read_text())
-analysis   = json.loads(Path('graphify-out/.graphify_analysis.json').read_text())
-labels_raw = json.loads(Path('graphify-out/.graphify_labels.json').read_text()) if Path('graphify-out/.graphify_labels.json').exists() else {}
+extraction = json.loads(Path('.graphify_extract.json').read_text())
+analysis   = json.loads(Path('.graphify_analysis.json').read_text())
+labels_raw = json.loads(Path('.graphify_labels.json').read_text()) if Path('.graphify_labels.json').exists() else {}
 G = build_from_json(extraction)
 communities = {int(k): v for k, v in analysis['communities'].items()}
 labels = {int(k): v for k, v in labels_raw.items()}
 if G.number_of_nodes() > 5000:
     print(f'Graph has {G.number_of_nodes()} nodes — too large for HTML viz')
 else:
-    to_html(G, communities, 'graphify-out/graph.html', community_labels=labels or None)
+    to_html(G, communities, 'graph.html', community_labels=labels or None)
     print('graph.html written')
 "
 ```
@@ -278,10 +280,10 @@ else:
 ### Step 8 — Clean up intermediate files
 
 ```bash
-rm -f graphify-out/.graphify_detect.json graphify-out/.graphify_extract.json graphify-out/.graphify_ast.json graphify-out/.graphify_semantic.json graphify-out/.graphify_analysis.json graphify-out/.graphify_labels.json
+rm -f .graphify_detect.json .graphify_extract.json .graphify_ast.json .graphify_semantic.json .graphify_analysis.json .graphify_labels.json
 ```
 
-Keep `graphify-out/graph.json`, `graphify-out/GRAPH_REPORT.md`, and `graphify-out/graph.html` — these are the artefacts. Return to the repo root (`cd {root}`).
+Keep `graph.json`, `GRAPH_REPORT.md`, and `graph.html` — these are the artefacts. Return to the repo root (`cd {root}`).
 
 ## Read the Report — the Real Work
 
@@ -320,16 +322,15 @@ Enumerate the 3–5 most promising surprising connections explicitly. For each, 
 
 ## Output
 
-Write `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md`:
+Write `{root}/docs/sci/<topic-slug>/graphs/rN.md` (this is the per-round annotated reading, sibling to the round's `rN/` artifact dir):
 
 ```markdown
-# Graph Reading: <topic>
+# Graph reading round N: <thread>
 
 **Date:** YYYY-MM-DD
-**Upstream research:** docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md
+**Upstream research:** docs/sci/<topic-slug>/research/rN.md
 **Corpus:** docs/sci/<topic-slug>/raw/ (<N> files, ~<W> words)
-**Graph artifacts:** docs/sci/<topic-slug>/graphs/graphify-out/
-
+**Graph artifacts:** docs/sci/<topic-slug>/graphs/rN/
 ## Graph shape
 
 - Nodes: <N>
@@ -369,12 +370,14 @@ Nodes with `conflicts_with` edges, or pairs of communities that have both pro- a
 - <e.g. "the graph treats every PHQ-9 measurement as the same concept, but in practice the instrument is administered differently in clinical vs. research contexts — this is a known measurement artifact not encoded in the corpus">
 - <e.g. "no germ-free-mouse studies are in the corpus, so the mouse-to-human mechanism chain is under-represented in the graph — consider adding before hypothesising causal claims">
 
-## Handoff to sci-hypothesize
+## Handoff to sci-synthesize
 
-The top candidate target(s) for hypothesizing (user should pick one):
-- Target 1 — <god node or surprising connection>
-- Target 2 — <...>
-- Target 3 — <...>
+Key signals for the synthesize phase to integrate into this round's answer and ranked next-area proposals:
+- God node 1 — <name, why it matters>
+- Surprising connection 1 — <Node A ↔ Node B, why interesting>
+- Open dispute 1 — <conflicts_with edge, what's contested>
+
+Synthesize will combine these with the depth-log to produce the round's `answers/rN.md` snapshot, the rewritten cumulative `answer.md`, and the ranked next-area proposals at the user gate.
 ```
 
 ## Rationalization Table
@@ -407,9 +410,6 @@ The graph is a summary of what is *in the corpus*, not a summary of what is *tru
 
 ## Handoff
 
-When the graph reading doc is complete and the user has selected a target (god node or surprising connection), proceed to `sci-hypothesize` with:
-- The research doc
-- The graph reading doc
-- The chosen target
+When the per-round graph reading doc (`graphs/rN.md`) is complete and the artifacts in `graphs/rN/` are written, the orchestrator (`sci-research-cycle`) proceeds to `sci-synthesize`. This skill does not invoke any downstream skill — the orchestrator owns the loop.
 
-The hypothesis phase will use the graph's node labels and community structure directly — named entities in the hypothesis doc must match node labels in the graph so traceability is preserved.
+The synthesize phase reads `graphs/rN/GRAPH_REPORT.md` and `graphs/rN.md` to identify god nodes / surprising connections that should inform the round's enriched answer and the ranked next-area proposals.

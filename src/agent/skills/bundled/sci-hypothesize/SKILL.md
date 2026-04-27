@@ -1,6 +1,6 @@
 ---
 name: sci-hypothesize
-description: Use after sci-graphify completes — turns research findings and graph insights into one or more falsifiable scientific hypotheses with predicted effect size, mechanism, pre-specified kill criteria, explicit alternative explanations to rule out, and statistical considerations. Refuses unfalsifiable claims and pattern-without-mechanism hypotheses. Hypotheses are tagged back to specific graph nodes and communities so the experiment can trace its scientific lineage.
+description: Use only when the user explicitly opts in to hypothesis generation — this is no longer auto-triggered after research. Consumes the cumulative answer (docs/sci/<topic-slug>/answer.md) plus the latest round's graph (docs/sci/<topic-slug>/graphs/rN/) and produces a falsifiable hypothesis with predicted effect size, kill criteria, and ruled-out alternatives. Refuses unfalsifiable claims and pattern-without-mechanism hypotheses. Hypotheses are tagged back to specific graph nodes and communities so the experiment can trace its scientific lineage.
 ---
 
 # Sci Hypothesize
@@ -8,6 +8,10 @@ description: Use after sci-graphify completes — turns research findings and gr
 ## Working directory
 
 The agent's pinned working directory is `{root}`. Scientific artifacts live under `{root}/docs/sci/<topic-slug>/`, one directory per research project. Write the hypothesis doc into that project's `hypotheses/` subfolder — never to a flat shared folder outside the project directory.
+
+## Invocation
+
+This skill is **opt-in only**. It is no longer invoked automatically by `sci-research-cycle`. The `sci-agent` dispatcher routes to it only when the user explicitly says "hypothesize" / "generate a hypothesis" / "what's the falsifiable claim?" or similar. If you find yourself running this skill without an explicit user request, STOP — you are violating the iterative-research contract. Return control to the orchestrator.
 
 ## The Rule
 
@@ -23,10 +27,12 @@ That one has: a signal (Shannon index), a prediction (PHQ-9 change), a sign (neg
 
 ## Inputs
 
-- The research doc: `{root}/docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md`.
-- The graph reading doc: `{root}/docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md`.
-- The graph JSON: `{root}/docs/sci/<topic-slug>/graphs/graphify-out/graph.json` (to cite node labels).
-- The user-selected target (god node or surprising connection).
+- **The cumulative answer:** `{root}/docs/sci/<topic-slug>/answer.md` — the running answer produced by `sci-synthesize` across all rounds. This is what we know so far.
+- **The latest graph reading + artifacts:** `{root}/docs/sci/<topic-slug>/graphs/rN.md` and `{root}/docs/sci/<topic-slug>/graphs/rN/` (find the highest N).
+- **The graph JSON:** `{root}/docs/sci/<topic-slug>/graphs/rN/graph.json` (to cite node labels).
+- **Optionally, the user's chosen target:** if the user said "hypothesize about X", X may name a god node, surprising connection, or unknown leaf. If unspecified, scan the latest synthesis (`{root}/docs/sci/<topic-slug>/synthesis/r<latest>.md`) for high-leverage targets and ask the user to pick before proceeding.
+
+If `answer.md` does not exist, STOP and tell the user that hypothesis generation requires at least one completed research round. Route them to `sci-research-cycle` first.
 
 If the user hasn't selected a target, ask before proceeding. Hypothesizing blind to the graph's signal produces the same incrementalist hypotheses the literature already has.
 
@@ -133,8 +139,8 @@ Write to `{root}/docs/sci/<topic-slug>/hypotheses/YYYY-MM-DD-<name-slug>.md`:
 # Hypothesis: <short name>
 
 **Date:** YYYY-MM-DD
-**Upstream research:** docs/sci/<topic-slug>/research/YYYY-MM-DD-<topic-slug>.md
-**Upstream graph reading:** docs/sci/<topic-slug>/graphs/YYYY-MM-DD-<topic-slug>.md
+**Upstream cumulative answer:** docs/sci/<topic-slug>/answer.md
+**Upstream graph reading:** docs/sci/<topic-slug>/graphs/rN.md (latest round)
 **Graph target:** <node label> [community <N>: <label>]
 **Claim type:** causal | correlational
 
@@ -191,7 +197,7 @@ Write to `{root}/docs/sci/<topic-slug>/hypotheses/YYYY-MM-DD-<name-slug>.md`:
 ## Next step
 
 - If accepted: hand off to experimental design. The experiment must be pre-registered against this doc. Kill criteria are binding.
-- If rejected: return to `sci-graphify` with user feedback (e.g. wrong target, mechanism too speculative), or to `sci-research` for more sources.
+- If rejected: return to `sci-research-cycle` to dig deeper on the originating thread, or pick a different next-area from the latest `synthesis/rN.md`.
 ```
 
 ## Rationalization Table
@@ -239,4 +245,4 @@ Writing one hypothesis that tests multiple things ("X predicts Y, and also X pre
 
 ## Handoff
 
-When the hypothesis doc is complete, the sci-research-cycle terminates and the user hands off to experimental design (human or downstream skill). The hypothesis doc is the contract: the experiment must be pre-registered against it, and any deviation from the kill criteria means the hypothesis is dead. Do not rescue it with parameter tweaking — if the data falsifies the claim, write a replication report and return to `sci-research` with the failed result as a new gap.
+When the hypothesis doc is complete, the user hands off to experimental design (human or downstream skill). The hypothesis doc is the contract: the experiment must be pre-registered against it, and any deviation from the kill criteria means the hypothesis is dead. Do not rescue it with parameter tweaking — if the data falsifies the claim, write a replication report and resume `sci-research-cycle` on a relevant thread with the failed result as a new gap.
